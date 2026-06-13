@@ -1,6 +1,8 @@
 # SkillMarket AI
 
-SkillMarket AI is a freelance marketplace that connects skilled students and freelancers with clients.
+## Purpose
+
+SkillMarket AI is a freelance marketplace designed to connect skilled students and freelancers with clients. The platform helps users showcase their skills, discover opportunities, post projects, and collaborate efficiently.
 
 ## Features
 
@@ -10,6 +12,7 @@ SkillMarket AI is a freelance marketplace that connects skilled students and fre
 - Freelancer Profiles
 - Project Applications
 - Dashboard Management
+- Live Customer Support (Tawk.to)
 
 ## Technologies Used
 
@@ -17,10 +20,6 @@ SkillMarket AI is a freelance marketplace that connects skilled students and fre
 - TypeScript
 - Replit
 - GitHub
-
-## Purpose
-
-The purpose of this project is to help students and freelancers showcase their skills and connect with potential clients.
 
 ## Author
 
