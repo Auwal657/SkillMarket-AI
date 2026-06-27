@@ -1,0 +1,1 @@
+{"version":3,"file":"freelancerSkill.d.ts","sourceRoot":"","sources":["../../../src/generated/types/freelancerSkill.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,+BAA+B,EAAE,MAAM,mCAAmC,CAAC;AAEzF,MAAM,WAAW,eAAe;IAC9B,EAAE,EAAE,MAAM,CAAC;IACX,OAAO,EAAE,MAAM,CAAC;IAChB,SAAS,EAAE,MAAM,CAAC;IAClB,aAAa,CAAC,EAAE,MAAM,CAAC;IACvB,gBAAgB,EAAE,+BAA+B,CAAC;CACnD"}

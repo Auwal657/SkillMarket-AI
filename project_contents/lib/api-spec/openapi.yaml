@@ -1,0 +1,1114 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: SkillMarket AI - Student talent discovery and freelance marketplace API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User profiles
+  - name: freelancers
+    description: Freelancer profiles
+  - name: skills
+    description: Skills management
+  - name: portfolio
+    description: Portfolio items
+  - name: projects
+    description: Project marketplace
+  - name: applications
+    description: Project applications
+  - name: dashboard
+    description: Dashboard summaries
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Auth ───────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Users ──────────────────────────────────────────────────────────────────
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update current user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ─── Freelancer Profiles ────────────────────────────────────────────────────
+  /freelancers:
+    get:
+      operationId: listFreelancers
+      tags: [freelancers]
+      summary: List freelancer profiles
+      parameters:
+        - name: skill
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of freelancers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FreelancerProfile"
+
+  /freelancers/{id}:
+    get:
+      operationId: getFreelancer
+      tags: [freelancers]
+      summary: Get freelancer profile by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Freelancer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerProfile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /freelancers/me:
+    get:
+      operationId: getMyFreelancerProfile
+      tags: [freelancers]
+      summary: Get the current user's freelancer profile
+      responses:
+        "200":
+          description: My freelancer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerProfile"
+        "404":
+          description: No freelancer profile yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createFreelancerProfile
+      tags: [freelancers]
+      summary: Create a freelancer profile for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreelancerProfileInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerProfile"
+    patch:
+      operationId: updateFreelancerProfile
+      tags: [freelancers]
+      summary: Update the current user's freelancer profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreelancerProfileUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerProfile"
+
+  # ─── Skills ─────────────────────────────────────────────────────────────────
+  /skills:
+    get:
+      operationId: listSkills
+      tags: [skills]
+      summary: List all available skills
+      responses:
+        "200":
+          description: List of skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Skill"
+
+  /freelancers/me/skills:
+    get:
+      operationId: listMySkills
+      tags: [skills]
+      summary: List skills for the current freelancer
+      responses:
+        "200":
+          description: My skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FreelancerSkill"
+    post:
+      operationId: addSkill
+      tags: [skills]
+      summary: Add a skill to the current freelancer profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillInput"
+      responses:
+        "201":
+          description: Skill added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerSkill"
+
+  /freelancers/me/skills/{skillId}:
+    delete:
+      operationId: removeSkill
+      tags: [skills]
+      summary: Remove a skill from the current freelancer profile
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ─── Portfolio ──────────────────────────────────────────────────────────────
+  /freelancers/me/portfolio:
+    get:
+      operationId: listMyPortfolio
+      tags: [portfolio]
+      summary: List portfolio items for the current freelancer
+      responses:
+        "200":
+          description: Portfolio items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortfolioItem"
+    post:
+      operationId: addPortfolioItem
+      tags: [portfolio]
+      summary: Add a portfolio item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortfolioItemInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioItem"
+
+  /freelancers/me/portfolio/{itemId}:
+    delete:
+      operationId: deletePortfolioItem
+      tags: [portfolio]
+      summary: Delete a portfolio item
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /freelancers/{id}/portfolio:
+    get:
+      operationId: getFreelancerPortfolio
+      tags: [portfolio]
+      summary: Get a freelancer's portfolio
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Portfolio items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortfolioItem"
+
+  # ─── Projects ───────────────────────────────────────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects in the marketplace
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Post a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /projects/my:
+    get:
+      operationId: listMyProjects
+      tags: [projects]
+      summary: List projects posted by the current client
+      responses:
+        "200":
+          description: My projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+
+  # ─── Applications ────────────────────────────────────────────────────────────
+  /applications:
+    post:
+      operationId: applyToProject
+      tags: [applications]
+      summary: Apply to a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationInput"
+      responses:
+        "201":
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "409":
+          description: Already applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /applications/my:
+    get:
+      operationId: listMyApplications
+      tags: [applications]
+      summary: List applications submitted by the current freelancer
+      responses:
+        "200":
+          description: My applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Application"
+
+  /projects/{projectId}/applications:
+    get:
+      operationId: listProjectApplications
+      tags: [applications]
+      summary: List applications for a specific project (client only)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Applications for project
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Application"
+
+  /applications/{id}/status:
+    patch:
+      operationId: updateApplicationStatus
+      tags: [applications]
+      summary: Accept or reject an application (client only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationStatusUpdate"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  # ─── Dashboards ──────────────────────────────────────────────────────────────
+  /dashboard/freelancer:
+    get:
+      operationId: getFreelancerDashboard
+      tags: [dashboard]
+      summary: Get freelancer dashboard summary
+      responses:
+        "200":
+          description: Freelancer dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerDashboard"
+
+  /dashboard/client:
+    get:
+      operationId: getClientDashboard
+      tags: [dashboard]
+      summary: Get client dashboard summary
+      responses:
+        "200":
+          description: Client dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDashboard"
+
+  /dashboard/ai-recommendations:
+    get:
+      operationId: getAiRecommendations
+      tags: [dashboard]
+      summary: Get AI-matched project recommendations for current freelancer
+      responses:
+        "200":
+          description: Recommended projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiRecommendation"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    # ─── Auth ─────────────────────────────────────────────────────────────────
+    RegisterInput:
+      type: object
+      required: [email, password, name, role]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        name:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum: [freelancer, client]
+        university:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    # ─── User ─────────────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, email, name, role, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [freelancer, client]
+        university:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        university:
+          type: string
+        avatarUrl:
+          type: string
+
+    # ─── Freelancer Profile ───────────────────────────────────────────────────
+    FreelancerProfile:
+      type: object
+      required: [id, userId, headline, bio, hourlyRate, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        user:
+          $ref: "#/components/schemas/User"
+        headline:
+          type: string
+        bio:
+          type: string
+        hourlyRate:
+          type: number
+        availabilityStatus:
+          type: string
+          enum: [available, busy, unavailable]
+        totalEarnings:
+          type: number
+        completedProjects:
+          type: integer
+        averageRating:
+          type: ["number", "null"]
+        totalReviews:
+          type: integer
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/FreelancerSkill"
+        portfolio:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortfolioItem"
+        createdAt:
+          type: string
+          format: date-time
+
+    FreelancerProfileInput:
+      type: object
+      required: [headline, bio, hourlyRate]
+      properties:
+        headline:
+          type: string
+        bio:
+          type: string
+        hourlyRate:
+          type: number
+        availabilityStatus:
+          type: string
+          enum: [available, busy, unavailable]
+
+    FreelancerProfileUpdate:
+      type: object
+      properties:
+        headline:
+          type: string
+        bio:
+          type: string
+        hourlyRate:
+          type: number
+        availabilityStatus:
+          type: string
+          enum: [available, busy, unavailable]
+
+    # ─── Skills ───────────────────────────────────────────────────────────────
+    Skill:
+      type: object
+      required: [id, name, category]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+
+    FreelancerSkill:
+      type: object
+      required: [id, skillId, skillName, proficiencyLevel]
+      properties:
+        id:
+          type: integer
+        skillId:
+          type: integer
+        skillName:
+          type: string
+        skillCategory:
+          type: string
+        proficiencyLevel:
+          type: string
+          enum: [beginner, intermediate, advanced, expert]
+
+    SkillInput:
+      type: object
+      required: [skillId, proficiencyLevel]
+      properties:
+        skillId:
+          type: integer
+        proficiencyLevel:
+          type: string
+          enum: [beginner, intermediate, advanced, expert]
+
+    # ─── Portfolio ────────────────────────────────────────────────────────────
+    PortfolioItem:
+      type: object
+      required: [id, title, description, createdAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+        projectUrl:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    PortfolioItemInput:
+      type: object
+      required: [title, description]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        imageUrl:
+          type: string
+        projectUrl:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    # ─── Projects ─────────────────────────────────────────────────────────────
+    Project:
+      type: object
+      required: [id, title, description, category, budgetMin, budgetMax, status, clientId, createdAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        budgetMin:
+          type: number
+        budgetMax:
+          type: number
+        timelineWeeks:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [open, in_progress, completed, cancelled]
+        clientId:
+          type: integer
+        clientName:
+          type: ["string", "null"]
+        requiredSkills:
+          type: array
+          items:
+            type: string
+        applicationCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    ProjectInput:
+      type: object
+      required: [title, description, category, budgetMin, budgetMax]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        budgetMin:
+          type: number
+        budgetMax:
+          type: number
+        timelineWeeks:
+          type: integer
+        requiredSkills:
+          type: array
+          items:
+            type: string
+
+    ProjectUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        budgetMin:
+          type: number
+        budgetMax:
+          type: number
+        timelineWeeks:
+          type: integer
+        status:
+          type: string
+          enum: [open, in_progress, completed, cancelled]
+        requiredSkills:
+          type: array
+          items:
+            type: string
+
+    # ─── Applications ─────────────────────────────────────────────────────────
+    Application:
+      type: object
+      required: [id, projectId, freelancerId, coverLetter, proposedRate, status, createdAt]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        projectTitle:
+          type: ["string", "null"]
+        freelancerId:
+          type: integer
+        freelancerName:
+          type: ["string", "null"]
+        freelancerHeadline:
+          type: ["string", "null"]
+        coverLetter:
+          type: string
+        proposedRate:
+          type: number
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationInput:
+      type: object
+      required: [projectId, coverLetter, proposedRate]
+      properties:
+        projectId:
+          type: integer
+        coverLetter:
+          type: string
+        proposedRate:
+          type: number
+
+    ApplicationStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+
+    # ─── Dashboards ───────────────────────────────────────────────────────────
+    FreelancerDashboard:
+      type: object
+      required: [totalEarnings, activeApplications, acceptedApplications, profileViews, averageRating, recentApplications]
+      properties:
+        totalEarnings:
+          type: number
+        activeApplications:
+          type: integer
+        acceptedApplications:
+          type: integer
+        profileViews:
+          type: integer
+        averageRating:
+          type: ["number", "null"]
+        recentApplications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Application"
+
+    ClientDashboard:
+      type: object
+      required: [totalProjectsPosted, openProjects, totalApplicationsReceived, totalSpent, recentProjects]
+      properties:
+        totalProjectsPosted:
+          type: integer
+        openProjects:
+          type: integer
+        totalApplicationsReceived:
+          type: integer
+        totalSpent:
+          type: number
+        recentProjects:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+
+    AiRecommendation:
+      type: object
+      required: [project, matchScore, matchReasons]
+      properties:
+        project:
+          $ref: "#/components/schemas/Project"
+        matchScore:
+          type: integer
+        matchReasons:
+          type: array
+          items:
+            type: string
