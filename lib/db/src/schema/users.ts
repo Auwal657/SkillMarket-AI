@@ -15,6 +15,7 @@ export const usersTable = pgTable("users", {
   isAdmin: boolean("is_admin").notNull().default(false),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
+  emailVerificationSentAt: timestamp("email_verification_sent_at", { withTimezone: true }),
   companyName: text("company_name"),
   companyDescription: text("company_description"),
   companyLogoUrl: text("company_logo_url"),

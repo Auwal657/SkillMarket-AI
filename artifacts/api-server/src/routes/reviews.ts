@@ -4,7 +4,7 @@ import {
   db, reviewsTable, freelancerProfilesTable, usersTable,
   notificationsTable, applicationsTable, projectsTable,
 } from "@workspace/db";
-import { requireAuth, requireRole, optionalAuth } from "../lib/auth";
+import { requireAuth, requireRole, optionalAuth, requireEmailVerified } from "../lib/auth";
 import { z } from "zod";
 
 const router = Router();
@@ -84,7 +84,7 @@ router.get("/can-review/:freelancerProfileId", requireAuth, requireRole("client"
   });
 });
 
-router.post("/", requireAuth, requireRole("client"), async (req, res) => {
+router.post("/", requireAuth, requireEmailVerified, requireRole("client"), async (req, res) => {
   const parsed = CreateReviewBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
 

@@ -16,7 +16,7 @@ function buildProfile(profile: Record<string, unknown>, user: Record<string, unk
   return {
     id: profile.id,
     userId: profile.userId,
-    user: { id: user.id, name: user.name, role: user.role, university: user.university, avatarUrl: user.avatarUrl, createdAt: user.createdAt },
+    user: { id: user.id, name: user.name, role: user.role, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt },
     headline: profile.headline,
     bio: profile.bio,
     hourlyRate: profile.hourlyRate,
@@ -258,7 +258,7 @@ router.get("/", optionalAuth, async (req, res) => {
 
   let query = db.select({
     profile: freelancerProfilesTable,
-    user: { id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role, university: usersTable.university, avatarUrl: usersTable.avatarUrl, createdAt: usersTable.createdAt },
+    user: { id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role, university: usersTable.university, avatarUrl: usersTable.avatarUrl, emailVerified: usersTable.emailVerified, createdAt: usersTable.createdAt },
   }).from(freelancerProfilesTable).innerJoin(usersTable, eq(freelancerProfilesTable.userId, usersTable.id)).$dynamic();
 
   const conditions = [];

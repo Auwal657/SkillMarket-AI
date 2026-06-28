@@ -28,12 +28,15 @@ import NotFoundPage from "./pages/NotFoundPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ClientProfilePage from "./pages/ClientProfilePage";
 import InvitationsPage from "./pages/InvitationsPage";
+import VerifyEmailPage from "./pages/auth/VerifyEmailPage";
+import UnverifiedBanner from "./components/common/UnverifiedBanner";
 
 export default function App() {
   return (
     <AuthProvider>
       <div className="min-h-screen flex flex-col bg-gray-50">
         <Navbar />
+        <UnverifiedBanner />
         <main className="flex-1">
           <Switch>
             <Route path="/" component={HomePage} />
@@ -51,6 +54,7 @@ export default function App() {
             <Route path="/register" component={RegisterPage} />
             <Route path="/forgot-password" component={ForgotPasswordPage} />
             <Route path="/reset-password" component={ResetPasswordPage} />
+            <Route path="/verify-email" component={VerifyEmailPage} />
             <Route path="/dashboard">
               <ProtectedRoute role="freelancer">
                 <FreelancerDashboard />

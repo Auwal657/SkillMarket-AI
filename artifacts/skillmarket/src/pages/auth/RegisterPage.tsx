@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Eye, EyeOff, UserPlus, Briefcase, GraduationCap } from "lucide-react";
+import { Eye, EyeOff, UserPlus, Briefcase, GraduationCap, Mail } from "lucide-react";
 import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -14,6 +14,9 @@ export default function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "", role: defaultRole as "freelancer" | "client", university: "" });
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const [registered, setRegistered] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [registeredRole, setRegisteredRole] = useState<"freelancer" | "client">("freelancer");
 
   const registerMutation = useRegister();
 
@@ -24,12 +27,39 @@ export default function RegisterPage() {
     try {
       const res = await registerMutation.mutateAsync({ data: { name: form.name, email: form.email, password: form.password, role: form.role, university: form.university || undefined } });
       login(res.token, res.user as Parameters<typeof login>[1]);
-      navigate(form.role === "client" ? "/dashboard/client" : "/dashboard");
+      setRegisteredEmail(form.email);
+      setRegisteredRole(form.role);
+      setRegistered(true);
     } catch (err: unknown) {
       const msg = (err as { data?: { error?: string } })?.data?.error ?? "Registration failed";
       setError(msg);
     }
   };
+
+  if (registered) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 bg-gray-50">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
+            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Mail className="text-indigo-500" size={32} />
+            </div>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">Check your inbox!</h1>
+            <p className="text-gray-500 text-sm mb-1">We sent a verification link to</p>
+            <p className="font-semibold text-gray-800 text-sm mb-5">{registeredEmail}</p>
+            <p className="text-gray-500 text-sm mb-7">Click the link in that email to verify your account and unlock all features. The link expires in 24 hours.</p>
+            <button
+              onClick={() => navigate(registeredRole === "client" ? "/dashboard/client" : "/dashboard")}
+              className="btn-primary justify-center w-full py-3"
+            >
+              Continue to Dashboard
+            </button>
+            <p className="text-xs text-gray-400 mt-4">Didn't receive it? Check your spam folder or use the "Resend email" button in the banner at the top of the page.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 bg-gray-50">
@@ -41,7 +71,6 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          {/* Role selector */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             {(["freelancer", "client"] as const).map(role => (
               <button key={role} type="button" onClick={() => setForm(f => ({ ...f, role }))}

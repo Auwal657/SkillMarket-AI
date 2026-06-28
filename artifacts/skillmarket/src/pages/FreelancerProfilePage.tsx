@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
@@ -191,6 +191,12 @@ export default function FreelancerProfilePage() {
               )} />
             </div>
             <h1 className="text-xl font-bold text-gray-900">{name}</h1>
+            {freelancer.user?.emailVerified && (
+              <div className="flex items-center justify-center gap-1 mt-1 mb-0.5">
+                <BadgeCheck size={15} className="text-indigo-500" />
+                <span className="text-xs text-indigo-600 font-medium">Verified</span>
+              </div>
+            )}
             <p className="text-gray-500 text-sm mt-1">{freelancer.headline}</p>
             {freelancer.user?.university && (
               <p className="text-xs text-gray-400 mt-1">{freelancer.user.university}</p>

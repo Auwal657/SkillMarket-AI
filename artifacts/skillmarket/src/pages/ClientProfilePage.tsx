@@ -16,6 +16,7 @@ interface ClientProfile {
   companyLogoUrl: string | null;
   website: string | null;
   isOnline: boolean;
+  emailVerified?: boolean;
   createdAt: string;
 }
 
@@ -92,6 +93,12 @@ export default function ClientProfilePage() {
             <h1 className="text-xl font-bold text-gray-900 mb-1">{profile.companyName ?? profile.name}</h1>
             {profile.companyName && (
               <p className="text-sm text-gray-500 mb-2">by {profile.name}</p>
+            )}
+            {profile.emailVerified && (
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <CheckCircle size={14} className="text-indigo-500" />
+                <span className="text-xs text-indigo-600 font-medium">Verified</span>
+              </div>
             )}
             <div className="flex items-center justify-center gap-1.5 text-xs mb-4">
               <span className={cn("w-2 h-2 rounded-full", profile.isOnline ? "bg-green-500" : "bg-gray-300")} />

@@ -8,6 +8,7 @@ interface AuthUser {
   role: "freelancer" | "client";
   university?: string | null;
   avatarUrl?: string | null;
+  emailVerified?: boolean;
   createdAt: string;
 }
 

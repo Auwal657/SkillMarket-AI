@@ -77,6 +77,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 }
 
+export async function requireEmailVerified(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  const { db, usersTable } = await import("@workspace/db");
+  const { eq } = await import("drizzle-orm");
+  const [user] = await db.select({ emailVerified: usersTable.emailVerified })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user.userId));
+  if (!user?.emailVerified) {
+    res.status(403).json({ error: "Email verification required. Please verify your email address before performing this action.", code: "EMAIL_NOT_VERIFIED" });
+    return;
+  }
+  next();
+}
+
 export function requireRole(role: "freelancer" | "client") {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

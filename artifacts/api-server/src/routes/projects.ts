@@ -2,7 +2,7 @@ import { Router } from "express";
 import { eq, ilike, or, sql, and, inArray, gte, lte } from "drizzle-orm";
 import { db, projectsTable, usersTable, applicationsTable, notificationsTable, freelancerProfilesTable } from "@workspace/db";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
-import { requireAuth, requireRole } from "../lib/auth";
+import { requireAuth, requireRole, requireEmailVerified } from "../lib/auth";
 
 const router = Router();
 
@@ -76,7 +76,7 @@ router.get("/", async (req, res) => {
   res.json(await enrichProjects(projects));
 });
 
-router.post("/", requireAuth, requireRole("client"), async (req, res) => {
+router.post("/", requireAuth, requireEmailVerified, requireRole("client"), async (req, res) => {
   const parsed = CreateProjectBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
 
