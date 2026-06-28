@@ -3,18 +3,16 @@ import { Link } from "wouter";
 import { FileText, Trash2, Eye } from "lucide-react";
 import { useListMyApplications } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../../contexts/AuthContext";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
 import { formatCurrency, getStatusColor, formatDate, cn } from "../../lib/utils";
 
 function useWithdrawApplication() {
-  const { token } = useAuth();
   return useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/applications/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -44,6 +42,13 @@ export default function MyApplicationsPage() {
     }
   };
 
+  const statusDescription: Record<string, string> = {
+    pending: "Awaiting client review",
+    accepted: "Congratulations! Your application was accepted",
+    rejected: "This application was not selected",
+    withdrawn: "You withdrew this application",
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="flex items-center justify-between mb-8">
@@ -67,7 +72,8 @@ export default function MyApplicationsPage() {
                     <span className="text-xs text-gray-400">{formatDate(app.createdAt)}</span>
                   </div>
                   <Link href={`/projects/${app.projectId}`} className="font-semibold text-gray-900 hover:text-indigo-600 transition-colors text-lg">{(app as unknown as { projectTitle?: string }).projectTitle ?? "Project"}</Link>
-                  <p className="text-sm text-gray-500 mt-1">Proposed rate: <span className="font-medium text-gray-700">{formatCurrency(app.proposedRate)}/hr</span></p>
+                  <p className="text-xs text-gray-400 mt-0.5">{statusDescription[app.status] ?? ""}</p>
+                  <p className="text-sm text-gray-500 mt-2">Proposed rate: <span className="font-medium text-gray-700">{formatCurrency(app.proposedRate)}/hr</span></p>
                   <p className="text-sm text-gray-600 mt-3 line-clamp-2 italic">"{app.coverLetter}"</p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Bell, CheckCheck } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import EmptyState from "../components/common/EmptyState";
@@ -19,11 +20,11 @@ const BASE = "/api";
 
 export default function NotificationsPage() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchNotifications = async () => {
-    // S2: credentials: "include" sends the httpOnly auth cookie automatically
     const res = await fetch(`${BASE}/notifications`, { credentials: "include" });
     if (res.ok) { const data = await res.json(); setNotifications(data); }
     setLoading(false);
@@ -39,9 +40,21 @@ export default function NotificationsPage() {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 
+  const handleNotificationClick = async (n: Notification) => {
+    if (!n.isRead) await markRead(n.id);
+    if (n.link) navigate(n.link);
+  };
+
   useEffect(() => {
     if (user) fetchNotifications();
     else setLoading(false);
+  }, [user]);
+
+  // Poll every 15s so new notifications appear without full page refresh
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -52,6 +65,7 @@ export default function NotificationsPage() {
     new_application: "📩",
     new_message: "💬",
     review_received: "⭐",
+    project_completed: "🏆",
   };
 
   if (loading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
@@ -75,14 +89,24 @@ export default function NotificationsPage() {
       ) : (
         <div className="space-y-2">
           {notifications.map(n => (
-            <div key={n.id} onClick={() => !n.isRead && markRead(n.id)}
-              className={cn("p-4 rounded-2xl border transition-colors cursor-pointer", n.isRead ? "border-gray-100 bg-white" : "border-indigo-100 bg-indigo-50 hover:bg-indigo-100/50")}>
+            <div
+              key={n.id}
+              onClick={() => handleNotificationClick(n)}
+              className={cn(
+                "p-4 rounded-2xl border transition-colors cursor-pointer",
+                n.isRead ? "border-gray-100 bg-white hover:bg-gray-50" : "border-indigo-100 bg-indigo-50 hover:bg-indigo-100/50",
+                n.link ? "cursor-pointer" : "cursor-default"
+              )}
+            >
               <div className="flex items-start gap-3">
                 <span className="text-xl">{typeIcon[n.type] ?? "🔔"}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-900">{n.title}</p>
                   <p className="text-sm text-gray-600 mt-0.5">{n.message}</p>
                   <p className="text-xs text-gray-400 mt-1">{formatRelativeTime(n.createdAt)}</p>
+                  {n.link && (
+                    <p className="text-xs text-indigo-500 mt-1">Click to view →</p>
+                  )}
                 </div>
                 {!n.isRead && <div className="w-2 h-2 bg-indigo-500 rounded-full mt-1.5 flex-shrink-0" />}
               </div>

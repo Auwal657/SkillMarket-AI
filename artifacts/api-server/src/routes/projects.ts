@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { eq, ilike, or, sql, and, inArray } from "drizzle-orm";
-import { db, projectsTable, usersTable, applicationsTable } from "@workspace/db";
+import { db, projectsTable, usersTable, applicationsTable, notificationsTable, freelancerProfilesTable } from "@workspace/db";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router = Router();
 
-// P1: Batch-enrich a list of raw projects — 2 queries total regardless of list size
 async function enrichProjects(projects: typeof projectsTable.$inferSelect[]) {
   if (projects.length === 0) return [];
 
@@ -33,7 +32,6 @@ async function enrichProjects(projects: typeof projectsTable.$inferSelect[]) {
   }));
 }
 
-// /my must come before /:id
 router.get("/my", requireAuth, requireRole("client"), async (req, res) => {
   const projects = await db.select().from(projectsTable)
     .where(eq(projectsTable.clientId, req.user!.userId))
@@ -138,6 +136,67 @@ router.patch("/:id", requireAuth, requireRole("client"), async (req, res) => {
   res.json({ ...updated, clientName: client?.name ?? null, applicationCount: Number(appCount?.count ?? 0) });
 });
 
+// Mark a project as completed — transitions in_progress → completed
+// Notifies the accepted freelancer so they can leave a review request
+router.patch("/:id/complete", requireAuth, requireRole("client"), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!project) { res.status(404).json({ error: "Project not found" }); return; }
+  if (project.clientId !== req.user!.userId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (project.status !== "in_progress") {
+    res.status(400).json({ error: "Only in-progress projects can be marked complete" }); return;
+  }
+
+  const [updated] = await db.update(projectsTable)
+    .set({ status: "completed" })
+    .where(eq(projectsTable.id, id))
+    .returning();
+
+  // Find the accepted freelancer and notify them
+  const [acceptedApp] = await db.select({ freelancerId: applicationsTable.freelancerId, proposedRate: applicationsTable.proposedRate })
+    .from(applicationsTable)
+    .where(and(eq(applicationsTable.projectId, id), eq(applicationsTable.status, "accepted")));
+
+  if (acceptedApp) {
+    // Update freelancer completedProjects counter if not already counted
+    const [fp] = await db.select({ id: freelancerProfilesTable.id })
+      .from(freelancerProfilesTable)
+      .where(eq(freelancerProfilesTable.userId, acceptedApp.freelancerId));
+
+    if (fp) {
+      await db.update(freelancerProfilesTable)
+        .set({ completedProjects: sql`${freelancerProfilesTable.completedProjects} + 1` })
+        .where(eq(freelancerProfilesTable.id, fp.id));
+    }
+
+    await db.insert(notificationsTable).values({
+      userId: acceptedApp.freelancerId,
+      type: "project_completed",
+      title: "Project completed! 🏆",
+      message: `"${project.title}" has been marked complete by the client`,
+      link: `/applications`,
+    }).catch(() => {});
+
+    // Notify client they can now leave a review
+    await db.insert(notificationsTable).values({
+      userId: req.user!.userId,
+      type: "project_completed",
+      title: "Project completed",
+      message: `Great work! You can now leave a review for the freelancer`,
+      link: `/freelancers`,
+    }).catch(() => {});
+  }
+
+  const [[client], [appCount]] = await Promise.all([
+    db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, id)),
+  ]);
+
+  res.json({ ...updated, clientName: client?.name ?? null, applicationCount: Number(appCount?.count ?? 0) });
+});
+
 router.delete("/:id", requireAuth, requireRole("client"), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -164,7 +223,6 @@ router.get("/:projectId/applications", requireAuth, requireRole("client"), async
 
   if (applications.length === 0) { res.json([]); return; }
 
-  // P1: Batch lookup freelancer names and headlines
   const freelancerIds = [...new Set(applications.map(a => a.freelancerId))];
   const [freelancers, freelancerProfiles] = await Promise.all([
     db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, freelancerIds)),
@@ -178,7 +236,6 @@ router.get("/:projectId/applications", requireAuth, requireRole("client"), async
   const result = applications.map(app => ({
     ...app,
     freelancerName: nameMap.get(app.freelancerId) ?? null,
-    // B7: Return actual headline instead of always null
     freelancerHeadline: headlineMap.get(app.freelancerId) ?? null,
     projectTitle: project.title,
   }));

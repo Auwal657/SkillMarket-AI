@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { eq, or, and, sql, inArray } from "drizzle-orm";
-import { db, conversationsTable, messagesTable, usersTable } from "@workspace/db";
+import { db, conversationsTable, messagesTable, usersTable, notificationsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { z } from "zod";
 
 const router = Router();
 
-// S8: Enforce a reasonable content length
 const SendMessageBody = z.object({
   recipientId: z.number().int().positive(),
   content: z.string().min(1).max(2000),
@@ -20,7 +19,6 @@ router.get("/conversations", requireAuth, async (req, res) => {
 
   if (conversations.length === 0) { res.json([]); return; }
 
-  // P1: Batch-fetch all other-participant user info in one query
   const otherIds = conversations.map(c => c.participant1Id === uid ? c.participant2Id : c.participant1Id);
   const uniqueOtherIds = [...new Set(otherIds)];
   const conversationIds = conversations.map(c => c.id);
@@ -29,7 +27,6 @@ router.get("/conversations", requireAuth, async (req, res) => {
     db.select({ id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl, role: usersTable.role })
       .from(usersTable).where(inArray(usersTable.id, uniqueOtherIds)),
 
-    // Last message per conversation — use DISTINCT ON for efficiency
     db.select().from(messagesTable)
       .where(inArray(messagesTable.conversationId, conversationIds))
       .orderBy(sql`${messagesTable.conversationId}, ${messagesTable.createdAt} DESC`),
@@ -49,7 +46,6 @@ router.get("/conversations", requireAuth, async (req, res) => {
   const userMap = new Map(otherUsers.map(u => [u.id, u]));
   const unreadMap = new Map(unreadCounts.map(u => [u.conversationId, Number(u.count)]));
 
-  // Build last-message map: first message for each conversation (since ordered DESC, first = latest)
   const lastMsgMap = new Map<number, typeof lastMessages[0]>();
   for (const msg of lastMessages) {
     if (!lastMsgMap.has(msg.conversationId)) lastMsgMap.set(msg.conversationId, msg);
@@ -70,7 +66,6 @@ router.get("/:conversationId", requireAuth, async (req, res) => {
   if (isNaN(conversationId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const uid = req.user!.userId;
 
-  // P6: Add pagination — oldest messages first, client can paginate backwards
   const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
   const offset = parseInt(req.query.offset as string || "0", 10);
 
@@ -99,6 +94,11 @@ router.post("/", requireAuth, async (req, res) => {
   const { recipientId, content } = parsed.data;
   if (uid === recipientId) { res.status(400).json({ error: "Cannot message yourself" }); return; }
 
+  // Verify recipient exists
+  const [recipient] = await db.select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable).where(eq(usersTable.id, recipientId));
+  if (!recipient) { res.status(404).json({ error: "Recipient not found" }); return; }
+
   const p1 = Math.min(uid, recipientId);
   const p2 = Math.max(uid, recipientId);
 
@@ -116,6 +116,17 @@ router.post("/", requireAuth, async (req, res) => {
   }).returning();
 
   await db.update(conversationsTable).set({ lastMessageAt: new Date() }).where(eq(conversationsTable.id, conv.id));
+
+  // Notify recipient of new message
+  const [sender] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, uid));
+  const preview = content.length > 60 ? content.slice(0, 60) + "…" : content;
+  await db.insert(notificationsTable).values({
+    userId: recipientId,
+    type: "new_message",
+    title: `New message from ${sender?.name ?? "someone"}`,
+    message: preview,
+    link: `/messages`,
+  }).catch(() => {});
 
   res.status(201).json({ ...message, conversationId: conv.id });
 });

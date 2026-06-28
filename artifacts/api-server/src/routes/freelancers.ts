@@ -2,7 +2,7 @@ import { Router } from "express";
 import { eq, ilike, or, sql, inArray } from "drizzle-orm";
 import {
   db, freelancerProfilesTable, usersTable, freelancerSkillsTable,
-  skillsTable, portfolioItemsTable,
+  skillsTable, portfolioItemsTable, projectsTable,
 } from "@workspace/db";
 import {
   CreateFreelancerProfileBody, UpdateFreelancerProfileBody,
@@ -12,7 +12,7 @@ import { requireAuth, requireRole, optionalAuth } from "../lib/auth";
 
 const router = Router();
 
-function buildProfile(profile: Record<string, unknown>, user: Record<string, unknown>, skills: unknown[], portfolio: unknown[]) {
+function buildProfile(profile: Record<string, unknown>, user: Record<string, unknown>, skills: unknown[], portfolio: unknown[], matchScore?: number) {
   return {
     id: profile.id,
     userId: profile.userId,
@@ -29,10 +29,10 @@ function buildProfile(profile: Record<string, unknown>, user: Record<string, unk
     skills,
     portfolio,
     createdAt: profile.createdAt,
+    ...(matchScore !== undefined ? { matchScore } : {}),
   };
 }
 
-// P1: Batch-fetch skills and portfolio for a list of profile IDs
 async function attachSkillsAndPortfolio(profileIds: number[]) {
   if (profileIds.length === 0) return { skillsMap: new Map(), portfolioMap: new Map() };
 
@@ -64,6 +64,36 @@ async function attachSkillsAndPortfolio(profileIds: number[]) {
   }
 
   return { skillsMap, portfolioMap };
+}
+
+// Compute AI-style match score for a freelancer against a project's required skills
+function computeMatchScore(
+  freelancerSkillNames: string[],
+  requiredSkills: string[],
+  averageRating: number | null,
+  availabilityStatus: string | null,
+): number {
+  const normalizedRequired = requiredSkills.map(s => s.toLowerCase().trim());
+  const normalizedFreelancer = freelancerSkillNames.map(s => s.toLowerCase().trim());
+
+  let skillScore = 0;
+  if (normalizedRequired.length > 0) {
+    const matches = normalizedRequired.filter(req =>
+      normalizedFreelancer.some(fs => fs.includes(req) || req.includes(fs))
+    ).length;
+    skillScore = Math.round((matches / normalizedRequired.length) * 70);
+  } else {
+    // No required skills specified — give full skill score
+    skillScore = 70;
+  }
+
+  const ratingScore = averageRating ? Math.round((averageRating / 5) * 20) : 10;
+
+  let availScore = 0;
+  if (availabilityStatus === "available") availScore = 10;
+  else if (availabilityStatus === "part-time") availScore = 5;
+
+  return Math.min(100, skillScore + ratingScore + availScore);
 }
 
 // IMPORTANT: /me routes MUST come before /:id
@@ -119,7 +149,6 @@ router.patch("/me", requireAuth, requireRole("freelancer"), async (req, res) => 
   res.json(buildProfile(updated as Record<string, unknown>, user as Record<string, unknown>, skillsMap.get(profile.id) ?? [], portfolioMap.get(profile.id) ?? []));
 });
 
-// Skills sub-routes
 router.get("/me/skills", requireAuth, async (req, res) => {
   const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
   if (!profile) { res.status(404).json({ error: "No freelancer profile" }); return; }
@@ -162,7 +191,6 @@ router.delete("/me/skills/:skillId", requireAuth, requireRole("freelancer"), asy
   res.json({ message: "Skill removed" });
 });
 
-// Portfolio sub-routes
 router.get("/me/portfolio", requireAuth, async (req, res) => {
   const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
   if (!profile) { res.status(404).json({ error: "No freelancer profile" }); return; }
@@ -201,12 +229,21 @@ router.delete("/me/portfolio/:itemId", requireAuth, requireRole("freelancer"), a
   res.json({ message: "Portfolio item deleted" });
 });
 
-// Public freelancer list
-router.get("/", async (req, res) => {
+// Public freelancer list — optionalAuth for match score computation
+router.get("/", optionalAuth, async (req, res) => {
   const skill = req.query.skill as string | undefined;
   const search = req.query.search as string | undefined;
+  const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;
   const limit = Math.min(parseInt(req.query.limit as string || "20", 10), 100);
   const offset = parseInt(req.query.offset as string || "0", 10);
+
+  // Optionally fetch project's required skills for match scoring
+  let requiredSkills: string[] = [];
+  if (projectId && !isNaN(projectId)) {
+    const [project] = await db.select({ requiredSkills: projectsTable.requiredSkills })
+      .from(projectsTable).where(eq(projectsTable.id, projectId));
+    if (project?.requiredSkills) requiredSkills = project.requiredSkills as string[];
+  }
 
   let profileIds: number[] | null = null;
   if (skill) {
@@ -234,13 +271,30 @@ router.get("/", async (req, res) => {
   const profiles = await query.limit(limit).offset(offset);
   if (profiles.length === 0) { res.json([]); return; }
 
-  // P1: Batch all skills and portfolio in 2 queries total
   const pIds = profiles.map(({ profile }) => profile.id);
   const { skillsMap, portfolioMap } = await attachSkillsAndPortfolio(pIds);
 
-  const result = profiles.map(({ profile, user }) =>
-    buildProfile(profile as Record<string, unknown>, user as Record<string, unknown>, skillsMap.get(profile.id) ?? [], portfolioMap.get(profile.id) ?? [])
-  );
+  const shouldComputeScore = projectId && !isNaN(projectId);
+
+  const result = profiles.map(({ profile, user }) => {
+    const freelancerSkills = skillsMap.get(profile.id) ?? [];
+    const skillNames = freelancerSkills.map((s: { skillName: string }) => s.skillName);
+    const matchScore = shouldComputeScore
+      ? computeMatchScore(skillNames, requiredSkills, profile.averageRating as number | null, profile.availabilityStatus as string | null)
+      : undefined;
+    return buildProfile(
+      profile as Record<string, unknown>,
+      user as Record<string, unknown>,
+      freelancerSkills,
+      portfolioMap.get(profile.id) ?? [],
+      matchScore,
+    );
+  });
+
+  // Sort by match score descending when scoring is active
+  if (shouldComputeScore) {
+    result.sort((a, b) => ((b.matchScore ?? 0) - (a.matchScore ?? 0)));
+  }
 
   res.json(result);
 });
@@ -253,7 +307,6 @@ router.get("/:id", optionalAuth, async (req, res) => {
   const [profile] = await db.select().from(freelancerProfilesTable).where(eq(freelancerProfilesTable.id, id));
   if (!profile) { res.status(404).json({ error: "Freelancer not found" }); return; }
 
-  // B2: Only increment views if the requester is NOT the profile owner
   const isOwner = req.user?.userId === profile.userId;
   if (!isOwner) {
     await db.update(freelancerProfilesTable)

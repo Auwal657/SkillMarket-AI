@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown, CheckSquare } from "lucide-react";
 import {
   useGetProject, useApplyToProject, useListProjectApplications,
   useUpdateApplicationStatus, useListMyApplications,
@@ -26,8 +26,9 @@ export default function ProjectDetailPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
   const [updatingAppId, setUpdatingAppId] = useState<number | null>(null);
+  const [completing, setCompleting] = useState(false);
 
-  const { data: project, isLoading } = useGetProject(pid, { query: { enabled: !!pid, queryKey: ["project", pid] } });
+  const { data: project, isLoading, refetch: refetchProject } = useGetProject(pid, { query: { enabled: !!pid, queryKey: ["project", pid] } });
   const { data: applications, refetch: refetchApps } = useListProjectApplications(pid, {
     query: { enabled: !!user && user.role === "client" && !!pid, queryKey: ["project-apps", pid] },
   });
@@ -42,7 +43,6 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     if (!user || !pid) return;
-    // S2: credentials: "include" sends the httpOnly auth cookie automatically
     fetch(`/api/saved/check?itemType=project&itemId=${pid}`, { credentials: "include" })
       .then(r => r.json())
       .then(d => { if (d.saved !== undefined) setIsSaved(d.saved); })
@@ -54,11 +54,7 @@ export default function ProjectDetailPage() {
     setSavingProject(true);
     try {
       if (isSaved) {
-        // B6: DELETE uses query params, not body — more reliable across browsers/proxies
-        await fetch(`/api/saved?itemType=project&itemId=${pid}`, {
-          method: "DELETE",
-          credentials: "include",
-        });
+        await fetch(`/api/saved?itemType=project&itemId=${pid}`, { method: "DELETE", credentials: "include" });
       } else {
         await fetch("/api/saved", {
           method: "POST",
@@ -99,10 +95,33 @@ export default function ProjectDetailPage() {
       await updateStatusMutation.mutateAsync({ id: appId, data: { status } });
       await refetchApps();
       queryClient.invalidateQueries({ queryKey: ["/api/projects", pid] });
+      await refetchProject();
     } catch {
       alert(`Failed to ${status} application`);
     } finally {
       setUpdatingAppId(null);
+    }
+  };
+
+  const handleMarkComplete = async () => {
+    if (!confirm("Mark this project as complete? This will notify the freelancer and allow you to leave a review.")) return;
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/projects/${pid}/complete`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error ?? "Failed to mark project complete");
+        return;
+      }
+      await refetchProject();
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", pid] });
+    } catch {
+      alert("Failed to mark project complete");
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -111,6 +130,7 @@ export default function ProjectDetailPage() {
 
   const isOwner = user?.id === project.clientId;
   const canApply = user?.role === "freelancer" && !isOwner;
+  const hasAcceptedApp = applications?.some(a => a.status === "accepted");
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -163,7 +183,7 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-3">{app.coverLetter}</p>
-                    {app.status === "pending" && (
+                    {app.status === "pending" && !hasAcceptedApp && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleUpdateStatus(app.id, "accepted")}
@@ -181,6 +201,11 @@ export default function ProjectDetailPage() {
                           {updatingAppId === app.id ? <span className="animate-spin w-3 h-3 border border-red-600 border-t-transparent rounded-full" /> : <ThumbsDown size={12} />}
                           Reject
                         </button>
+                      </div>
+                    )}
+                    {app.status === "accepted" && (
+                      <div className="flex items-center gap-1.5 text-green-700 text-xs font-medium">
+                        <CheckCircle size={12} /> Accepted — working with this freelancer
                       </div>
                     )}
                   </div>
@@ -275,6 +300,28 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
+          {/* Mark Complete button — visible to client when project is in_progress */}
+          {isOwner && project.status === "in_progress" && (
+            <button
+              onClick={handleMarkComplete}
+              disabled={completing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {completing
+                ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                : <CheckSquare size={16} />}
+              {completing ? "Completing..." : "Mark as Complete"}
+            </button>
+          )}
+
+          {isOwner && project.status === "completed" && (
+            <div className="card p-4 bg-green-50 border-green-200 text-center">
+              <CheckCircle size={20} className="text-green-600 mx-auto mb-2" />
+              <p className="text-sm font-medium text-green-800">Project Completed</p>
+              <p className="text-xs text-green-600 mt-1">You can now review the freelancer</p>
+            </div>
+          )}
+
           {user && !isOwner && (
             <button
               onClick={handleSaveProject}
@@ -291,7 +338,7 @@ export default function ProjectDetailPage() {
             </button>
           )}
 
-          {isOwner && (
+          {isOwner && project.status === "open" && (
             <Link href={`/projects/${pid}/edit`} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
               Edit Project
             </Link>

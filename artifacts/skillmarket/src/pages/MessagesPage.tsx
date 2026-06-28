@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearch } from "wouter";
 import { MessageCircle, Send } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -38,35 +38,56 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  // B5: Track whether we've already opened the recipient conversation to prevent
-  // re-sending the auto message on every render cycle
   const recipientOpened = useRef<string | null>(null);
+  const activeConvRef = useRef<number | null>(null);
 
-  // S2: All fetches use credentials: "include" — cookie auth handles auth automatically
-  const fetchConversations = async () => {
+  // Keep ref in sync so polling callbacks always see current value
+  activeConvRef.current = activeConv;
+
+  const fetchConversations = useCallback(async () => {
     const res = await fetch(`${BASE}/messages/conversations`, { credentials: "include" });
     if (res.ok) { const data = await res.json(); setConversations(data); }
     setLoading(false);
-  };
+  }, []);
 
-  const fetchMessages = async (convId: number) => {
+  const fetchMessages = useCallback(async (convId: number) => {
     const res = await fetch(`${BASE}/messages/${convId}`, { credentials: "include" });
     if (res.ok) { const data = await res.json(); setMessages(data); }
-  };
+  }, []);
 
-  useEffect(() => { fetchConversations(); }, []);
-  useEffect(() => { if (activeConv) { fetchMessages(activeConv); } }, [activeConv]);
+  // Initial load
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
+  // Load messages when active conversation changes
+  useEffect(() => {
+    if (activeConv) { fetchMessages(activeConv); }
+  }, [activeConv, fetchMessages]);
+
+  // Auto-scroll to bottom when messages update
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // B5: When arriving via ?recipient=X, open (or create) the conversation WITHOUT
-  // auto-sending a "Hi!" message — let the user compose their own first message.
+  // Poll active conversation every 3s for new messages
+  useEffect(() => {
+    if (!activeConv) return;
+    const interval = setInterval(() => {
+      if (activeConvRef.current) fetchMessages(activeConvRef.current);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeConv, fetchMessages]);
+
+  // Poll conversation list every 10s to update unread counts and last messages
+  useEffect(() => {
+    const interval = setInterval(() => { fetchConversations(); }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchConversations]);
+
+  // When arriving via ?recipient=X, open an existing conversation if one exists
   useEffect(() => {
     if (!recipientId || !user) return;
     if (recipientOpened.current === recipientId) return;
     recipientOpened.current = recipientId;
 
     const openConversation = async () => {
-      // Check if a conversation with this recipient already exists
       const res = await fetch(`${BASE}/messages/conversations`, { credentials: "include" });
       if (!res.ok) return;
       const convs: Conversation[] = await res.json();
@@ -76,7 +97,6 @@ export default function MessagesPage() {
       if (existing) {
         setActiveConv(existing.id);
       }
-      // If no existing conversation, the user will start one by sending their first message
     };
     openConversation();
   }, [recipientId, user]);
