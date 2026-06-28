@@ -226,17 +226,18 @@ router.get("/:projectId/applications", requireAuth, requireRole("client"), async
   const freelancerIds = [...new Set(applications.map(a => a.freelancerId))];
   const [freelancers, freelancerProfiles] = await Promise.all([
     db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, freelancerIds)),
-    db.select({ userId: freelancerProfilesTable.userId, headline: freelancerProfilesTable.headline })
+    db.select({ id: freelancerProfilesTable.id, userId: freelancerProfilesTable.userId, headline: freelancerProfilesTable.headline })
       .from(freelancerProfilesTable).where(inArray(freelancerProfilesTable.userId, freelancerIds)),
   ]);
 
   const nameMap = new Map(freelancers.map(f => [f.id, f.name]));
-  const headlineMap = new Map(freelancerProfiles.map(f => [f.userId, f.headline]));
+  const profileMap = new Map(freelancerProfiles.map(f => [f.userId, { headline: f.headline, profileId: f.id }]));
 
   const result = applications.map(app => ({
     ...app,
     freelancerName: nameMap.get(app.freelancerId) ?? null,
-    freelancerHeadline: headlineMap.get(app.freelancerId) ?? null,
+    freelancerHeadline: profileMap.get(app.freelancerId)?.headline ?? null,
+    freelancerProfileId: profileMap.get(app.freelancerId)?.profileId ?? null,
     projectTitle: project.title,
   }));
 

@@ -1,13 +1,30 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
 import SkillBadge from "../components/common/SkillBadge";
 import StarRating from "../components/common/StarRating";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import { formatCurrency, getAvailabilityColor, cn } from "../lib/utils";
+import { formatCurrency, getAvailabilityColor, formatDate, cn } from "../lib/utils";
+
+interface Review {
+  id: number;
+  rating: number;
+  comment: string | null;
+  reviewerName: string | null;
+  reviewerAvatar: string | null;
+  createdAt: string;
+  projectId: number | null;
+}
+
+interface CanReviewData {
+  canReview: boolean;
+  alreadyReviewed?: boolean;
+  projectId?: number;
+  reason?: string | null;
+}
 
 export default function FreelancerProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -19,11 +36,33 @@ export default function FreelancerProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveChecked, setSaveChecked] = useState(false);
 
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [canReviewData, setCanReviewData] = useState<CanReviewData | null>(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+
   const { data: freelancer, isLoading } = useGetFreelancer(fid, { query: { enabled: !!fid, queryKey: ["freelancer", fid] } });
 
   useEffect(() => {
+    if (!fid) return;
+    fetch(`/api/reviews/freelancer/${fid}`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Review[]) => setReviews(data))
+      .catch(() => {});
+  }, [fid]);
+
+  useEffect(() => {
+    if (!user || user.role !== "client" || !fid) return;
+    fetch(`/api/reviews/can-review/${fid}`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: CanReviewData | null) => { if (data) setCanReviewData(data); })
+      .catch(() => {});
+  }, [fid, user]);
+
+  useEffect(() => {
     if (!user || !fid) return;
-    // S2: credentials: "include" sends the httpOnly auth cookie automatically
     fetch(`/api/saved/check?itemType=freelancer&itemId=${fid}`, { credentials: "include" })
       .then(r => r.json())
       .then(d => {
@@ -38,11 +77,7 @@ export default function FreelancerProfilePage() {
     setSavingProfile(true);
     try {
       if (isSaved) {
-        // B6: DELETE uses query params, not request body
-        await fetch(`/api/saved?itemType=freelancer&itemId=${fid}`, {
-          method: "DELETE",
-          credentials: "include",
-        });
+        await fetch(`/api/saved?itemType=freelancer&itemId=${fid}`, { method: "DELETE", credentials: "include" });
       } else {
         await fetch("/api/saved", {
           method: "POST",
@@ -53,7 +88,6 @@ export default function FreelancerProfilePage() {
       }
       setIsSaved(!isSaved);
     } catch {
-      // silent
     } finally {
       setSavingProfile(false);
     }
@@ -62,6 +96,39 @@ export default function FreelancerProfilePage() {
   const handleContact = () => {
     if (!user) { navigate("/login"); return; }
     navigate(`/messages?recipient=${freelancer?.userId}`);
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReviewError("");
+    if (!canReviewData?.projectId) return;
+    setSubmittingReview(true);
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          freelancerProfileId: fid,
+          projectId: canReviewData.projectId,
+          rating: reviewForm.rating,
+          comment: reviewForm.comment || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setReviewError(data?.error ?? "Failed to submit review");
+        return;
+      }
+      setReviewSubmitted(true);
+      setCanReviewData(prev => prev ? { ...prev, canReview: false, alreadyReviewed: true } : null);
+      const updated = await fetch(`/api/reviews/freelancer/${fid}`, { credentials: "include" });
+      if (updated.ok) setReviews(await updated.json());
+    } catch {
+      setReviewError("Failed to submit review");
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   if (isLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
@@ -146,6 +213,59 @@ export default function FreelancerProfilePage() {
               )}
             </div>
           </div>
+
+          {/* Leave a Review card (client only, eligible) */}
+          {user?.role === "client" && canReviewData && (
+            <div className="card p-5">
+              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Leave a Review</h3>
+              {reviewSubmitted || canReviewData.alreadyReviewed ? (
+                <p className="text-sm text-green-700 bg-green-50 rounded-xl px-3 py-2">
+                  {reviewSubmitted ? "Review submitted — thank you!" : "You've already reviewed this freelancer."}
+                </p>
+              ) : canReviewData.canReview ? (
+                <form onSubmit={handleSubmitReview} className="space-y-3">
+                  {reviewError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{reviewError}</p>}
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Rating</label>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setReviewForm(f => ({ ...f, rating: v }))}
+                          className="focus:outline-none"
+                        >
+                          <Star
+                            size={20}
+                            className={v <= reviewForm.rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Comment (optional)</label>
+                    <textarea
+                      value={reviewForm.comment}
+                      onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
+                      className="input text-sm min-h-20"
+                      placeholder="Describe your experience working with this freelancer..."
+                      maxLength={2000}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submittingReview}
+                    className="btn-primary w-full justify-center text-sm py-2"
+                  >
+                    {submittingReview ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : "Submit Review"}
+                  </button>
+                </form>
+              ) : (
+                <p className="text-xs text-gray-500">{canReviewData.reason ?? "You are not eligible to review this freelancer."}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Main */}
@@ -192,6 +312,35 @@ export default function FreelancerProfilePage() {
               </div>
             </div>
           )}
+
+          {/* Reviews */}
+          <div className="card p-6">
+            <h2 className="font-semibold text-gray-900 mb-4">
+              Reviews {reviews.length > 0 && <span className="text-gray-400 font-normal text-sm">({reviews.length})</span>}
+            </h2>
+            {reviews.length === 0 ? (
+              <p className="text-sm text-gray-400">No reviews yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map(r => (
+                  <div key={r.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Avatar name={r.reviewerName ?? "?"} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{r.reviewerName ?? "Anonymous"}</p>
+                        <p className="text-xs text-gray-400">{formatDate(r.createdAt)}</p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <StarRating rating={r.rating} size={13} />
+                        <span className="text-sm font-semibold text-gray-900 ml-1">{r.rating}</span>
+                      </div>
+                    </div>
+                    {r.comment && <p className="text-sm text-gray-600 leading-relaxed ml-10">{r.comment}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

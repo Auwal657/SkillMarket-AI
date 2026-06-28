@@ -131,6 +131,7 @@ export default function ProjectDetailPage() {
   const isOwner = user?.id === project.clientId;
   const canApply = user?.role === "freelancer" && !isOwner;
   const hasAcceptedApp = applications?.some(a => a.status === "accepted");
+  const acceptedApp = applications?.find(a => a.status === "accepted") as (typeof applications extends (infer T)[] | undefined ? T : never) & { freelancerProfileId?: number | null } | undefined;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -318,7 +319,16 @@ export default function ProjectDetailPage() {
             <div className="card p-4 bg-green-50 border-green-200 text-center">
               <CheckCircle size={20} className="text-green-600 mx-auto mb-2" />
               <p className="text-sm font-medium text-green-800">Project Completed</p>
-              <p className="text-xs text-green-600 mt-1">You can now review the freelancer</p>
+              {acceptedApp?.freelancerProfileId ? (
+                <Link
+                  href={`/freelancers/${acceptedApp.freelancerProfileId}`}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-green-700 underline hover:text-green-900"
+                >
+                  Leave a review for {acceptedApp.freelancerName ?? "the freelancer"} →
+                </Link>
+              ) : (
+                <p className="text-xs text-green-600 mt-1">You can now review the freelancer</p>
+              )}
             </div>
           )}
 

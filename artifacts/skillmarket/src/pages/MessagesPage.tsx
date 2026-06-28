@@ -37,6 +37,7 @@ export default function MessagesPage() {
   const [newMsg, setNewMsg] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [recipientInfo, setRecipientInfo] = useState<{ id: number; name: string; avatarUrl?: string | null; role: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recipientOpened = useRef<string | null>(null);
   const activeConvRef = useRef<number | null>(null);
@@ -88,14 +89,19 @@ export default function MessagesPage() {
     recipientOpened.current = recipientId;
 
     const openConversation = async () => {
-      const res = await fetch(`${BASE}/messages/conversations`, { credentials: "include" });
-      if (!res.ok) return;
-      const convs: Conversation[] = await res.json();
-      setConversations(convs);
-
-      const existing = convs.find(c => c.otherUser?.id === parseInt(recipientId));
-      if (existing) {
-        setActiveConv(existing.id);
+      const [convsRes, userRes] = await Promise.all([
+        fetch(`${BASE}/messages/conversations`, { credentials: "include" }),
+        fetch(`/api/users/${recipientId}`, { credentials: "include" }),
+      ]);
+      if (convsRes.ok) {
+        const convs: Conversation[] = await convsRes.json();
+        setConversations(convs);
+        const existing = convs.find(c => c.otherUser?.id === parseInt(recipientId));
+        if (existing) { setActiveConv(existing.id); return; }
+      }
+      if (userRes.ok) {
+        const u = await userRes.json();
+        setRecipientInfo({ id: u.id, name: u.name, avatarUrl: u.avatarUrl ?? null, role: u.role });
       }
     };
     openConversation();
@@ -214,8 +220,18 @@ export default function MessagesPage() {
           </div>
         ) : isNewRecipient ? (
           <div className="flex-1 flex flex-col">
-            <div className="p-4 border-b border-gray-100">
-              <p className="text-sm font-medium text-gray-700">New conversation</p>
+            <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+              {recipientInfo ? (
+                <>
+                  <Avatar name={recipientInfo.name} avatarUrl={recipientInfo.avatarUrl} size="sm" />
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{recipientInfo.name}</p>
+                    <p className="text-xs text-gray-400 capitalize">{recipientInfo.role}</p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm font-medium text-gray-700">New conversation</p>
+              )}
             </div>
             <div className="flex-1 flex items-center justify-center">
               <p className="text-gray-400 text-sm">Send a message to start the conversation</p>

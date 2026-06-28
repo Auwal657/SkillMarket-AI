@@ -116,10 +116,38 @@ export default function FreelancerDashboard() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {recommendations.slice(0, 6).map(rec => (
-              <ProjectCard key={rec.project.id} id={rec.project.id} title={rec.project.title} description={rec.project.description}
-                category={rec.project.category} budgetMin={rec.project.budgetMin} budgetMax={rec.project.budgetMax}
-                timelineWeeks={rec.project.timelineWeeks} status={rec.project.status} clientName={rec.project.clientName}
-                requiredSkills={rec.project.requiredSkills} applicationCount={rec.project.applicationCount} createdAt={rec.project.createdAt} />
+              <div key={rec.project.id} className="relative">
+                {rec.matchScore !== undefined && (
+                  <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-1">
+                    <span className="badge bg-indigo-600 text-white font-semibold shadow-sm">
+                      {rec.matchScore}% match
+                    </span>
+                  </div>
+                )}
+                <ProjectCard
+                  id={rec.project.id}
+                  title={rec.project.title}
+                  description={rec.project.description}
+                  category={rec.project.category}
+                  budgetMin={rec.project.budgetMin}
+                  budgetMax={rec.project.budgetMax}
+                  timelineWeeks={rec.project.timelineWeeks}
+                  status={rec.project.status}
+                  clientName={rec.project.clientName}
+                  requiredSkills={rec.project.requiredSkills}
+                  applicationCount={rec.project.applicationCount}
+                  createdAt={rec.project.createdAt}
+                />
+                {rec.matchReasons && rec.matchReasons.length > 0 && (
+                  <div className="mt-1.5 px-1 flex flex-wrap gap-1">
+                    {rec.matchReasons.slice(0, 3).map((reason, i) => (
+                      <span key={i} className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
