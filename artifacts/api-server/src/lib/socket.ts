@@ -1,12 +1,23 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
-import cookieParser from "cookie-parser";
 import { verifyToken } from "./auth";
 import { logger } from "./logger";
 import { db, messagesTable, conversationsTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 
 export let io: SocketIOServer;
+
+// In-memory presence tracking: userId -> Set of socket IDs
+const onlineUsers = new Map<number, Set<string>>();
+
+export function getOnlineUserIds(): number[] {
+  return [...onlineUsers.keys()];
+}
+
+export function isUserOnline(userId: number): boolean {
+  const sockets = onlineUsers.get(userId);
+  return !!sockets && sockets.size > 0;
+}
 
 export function initSocket(httpServer: HttpServer) {
   const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
@@ -47,6 +58,13 @@ export function initSocket(httpServer: HttpServer) {
     const userId: number = socket.data.userId;
     logger.info({ userId }, "Socket connected");
 
+    // Track presence
+    if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
+    onlineUsers.get(userId)!.add(socket.id);
+
+    // Announce user came online to everyone
+    socket.broadcast.emit("presence:online", { userId });
+
     // User joins their personal room for targeted notifications
     socket.join(`user:${userId}`);
 
@@ -58,7 +76,7 @@ export function initSocket(httpServer: HttpServer) {
           .from(conversationsTable)
           .where(eq(conversationsTable.id, conversationId));
         if (!conv) return;
-        if (conv.p1 !== userId && conv.p2 !== userId) return; // not a participant
+        if (conv.p1 !== userId && conv.p2 !== userId) return;
         socket.join(`conv:${conversationId}`);
       } catch (err) {
         logger.error(err, "join:conversation error");
@@ -70,9 +88,33 @@ export function initSocket(httpServer: HttpServer) {
       socket.leave(`conv:${conversationId}`);
     });
 
-    // Send a message
-    socket.on("message:send", async ({ recipientId, content }: { recipientId: number; content: string }) => {
-      if (!content?.trim() || !recipientId) return;
+    // Typing indicators
+    socket.on("typing:start", ({ conversationId }: { conversationId: number }) => {
+      socket.to(`conv:${conversationId}`).emit("typing:start", { userId, conversationId });
+    });
+
+    socket.on("typing:stop", ({ conversationId }: { conversationId: number }) => {
+      socket.to(`conv:${conversationId}`).emit("typing:stop", { userId, conversationId });
+    });
+
+    // Send a message (optionally with attachment)
+    socket.on("message:send", async ({
+      recipientId,
+      content,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+    }: {
+      recipientId: number;
+      content: string;
+      attachmentUrl?: string;
+      attachmentName?: string;
+      attachmentType?: string;
+    }) => {
+      const hasContent = content?.trim();
+      const hasAttachment = attachmentUrl?.trim();
+      if (!hasContent && !hasAttachment) return;
+      if (!recipientId) return;
       if (userId === recipientId) return;
 
       try {
@@ -104,7 +146,14 @@ export function initSocket(httpServer: HttpServer) {
 
         const [message] = await db
           .insert(messagesTable)
-          .values({ conversationId: conv.id, senderId: userId, content: content.trim() })
+          .values({
+            conversationId: conv.id,
+            senderId: userId,
+            content: content?.trim() ?? "",
+            attachmentUrl: attachmentUrl ?? null,
+            attachmentName: attachmentName ?? null,
+            attachmentType: attachmentType ?? null,
+          })
           .returning();
 
         await db
@@ -112,7 +161,10 @@ export function initSocket(httpServer: HttpServer) {
           .set({ lastMessageAt: new Date() })
           .where(eq(conversationsTable.id, conv.id));
 
-        // Emit to everyone in the conversation room (including sender)
+        // Stop typing indicator on send
+        socket.to(`conv:${conv.id}`).emit("typing:stop", { userId, conversationId: conv.id });
+
+        // Emit to everyone in the conversation room
         io.to(`conv:${conv.id}`).emit("message:new", {
           ...message,
           conversationId: conv.id,
@@ -123,13 +175,15 @@ export function initSocket(httpServer: HttpServer) {
           conversationId: conv.id,
         });
 
-        // Notify recipient if not in the conversation room
         const [sender] = await db
           .select({ name: usersTable.name })
           .from(usersTable)
           .where(eq(usersTable.id, userId));
 
-        const preview = content.length > 60 ? content.slice(0, 60) + "…" : content;
+        const preview = hasContent
+          ? (content.length > 60 ? content.slice(0, 60) + "…" : content)
+          : `📎 ${attachmentName ?? "file"}`;
+
         const [notif] = await db
           .insert(notificationsTable)
           .values({
@@ -161,7 +215,6 @@ export function initSocket(httpServer: HttpServer) {
             )
           );
 
-        // Tell the other participant their messages were read
         io.to(`conv:${conversationId}`).emit("conversation:seen", {
           conversationId,
           byUserId: userId,
@@ -171,8 +224,26 @@ export function initSocket(httpServer: HttpServer) {
       }
     });
 
+    // Presence: respond to queries about who is online
+    socket.on("presence:query", (userIds: number[]) => {
+      const result: Record<number, boolean> = {};
+      for (const uid of userIds) {
+        result[uid] = isUserOnline(uid);
+      }
+      socket.emit("presence:status", result);
+    });
+
     socket.on("disconnect", () => {
       logger.info({ userId }, "Socket disconnected");
+      const sockets = onlineUsers.get(userId);
+      if (sockets) {
+        sockets.delete(socket.id);
+        if (sockets.size === 0) {
+          onlineUsers.delete(userId);
+          // Announce offline only when last socket closes
+          socket.broadcast.emit("presence:offline", { userId });
+        }
+      }
     });
   });
 

@@ -13,6 +13,12 @@ export const usersTable = pgTable("users", {
   university: text("university"),
   avatarUrl: text("avatar_url"),
   isAdmin: boolean("is_admin").notNull().default(false),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerificationToken: text("email_verification_token"),
+  companyName: text("company_name"),
+  companyDescription: text("company_description"),
+  companyLogoUrl: text("company_logo_url"),
+  website: text("website"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

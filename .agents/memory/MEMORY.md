@@ -2,3 +2,5 @@
 - [B6 DELETE saved](b6-delete-saved.md) — DELETE /api/saved uses query params (?itemType=X&itemId=Y), not request body; all frontend callers updated.
 - [B3 notification route order](b3-notif-route-order.md) — /read-all must be registered before /:id/read to avoid Express matching "read-all" as an :id param.
 - [Socket.IO setup](socket-setup.md) — Socket.IO uses HTTP server wrapping Express; cookie parsed manually from handshake header (not cookie-parser); module-level singleton socket in frontend; REST fallback when socket disconnected.
+- [api-client-react params](api-client-react-params.md) — ListProjectsParams lives in node_modules/@workspace/api-client-react/src/generated/api.schemas.ts; package exports src/index.ts directly so Vite picks up TS edits without a rebuild step.
+- [Write tool guardrail](write-tool-guardrail.md) — write tool rejects files not read in current session; use edit for existing files even when rewriting most content.

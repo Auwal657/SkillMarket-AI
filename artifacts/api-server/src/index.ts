@@ -1,4 +1,5 @@
 import http from "http";
+import path from "path";
 import express from "express";
 import cors from "cors";
 import compression from "compression";
@@ -7,6 +8,7 @@ import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
 import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
+import { isUserOnline } from "./lib/socket";
 import authRoutes from "./routes/auth";
 import usersRoutes from "./routes/users";
 import freelancersRoutes from "./routes/freelancers";
@@ -20,6 +22,8 @@ import messagesRoutes from "./routes/messages";
 import notificationsRoutes from "./routes/notifications";
 import savedRoutes from "./routes/saved";
 import adminRoutes from "./routes/admin";
+import reportsRoutes from "./routes/reports";
+import uploadsRoutes from "./routes/uploads";
 
 // S1: Validate required secrets at startup before anything else
 if (!process.env.JWT_SECRET) {
@@ -107,6 +111,54 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/saved", savedRoutes);
 app.use("/api/portfolio", portfolioRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/reports", reportsRoutes);
+app.use("/api/uploads", uploadsRoutes);
+
+// Serve uploaded files as static assets
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+// Online presence endpoint
+app.get("/api/presence", (req, res) => {
+  const ids = ((req.query.ids as string) ?? "").split(",").map(Number).filter(n => !isNaN(n));
+  const result: Record<number, boolean> = {};
+  for (const id of ids) result[id] = isUserOnline(id);
+  res.json(result);
+});
+
+// Open Graph / SEO meta endpoint for project pages
+app.get("/og/project/:id", async (req, res) => {
+  try {
+    const { db, projectsTable, usersTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).send("Invalid id"); return; }
+    const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+    if (!project) { res.status(404).send("Not found"); return; }
+    const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, project.clientId));
+    const title = `${project.title} — SkillMarket AI`;
+    const desc = project.description.slice(0, 200);
+    const url = `${req.protocol}://${req.get("host")}/projects/${id}`;
+    res.setHeader("Content-Type", "text/html");
+    res.send(`<!DOCTYPE html><html><head>
+      <title>${title}</title>
+      <meta name="description" content="${desc}">
+      <meta property="og:title" content="${title}">
+      <meta property="og:description" content="${desc}">
+      <meta property="og:url" content="${url}">
+      <meta property="og:type" content="website">
+      <meta property="og:site_name" content="SkillMarket AI">
+      <meta name="twitter:card" content="summary">
+      <meta name="twitter:title" content="${title}">
+      <meta name="twitter:description" content="${desc}">
+      <meta name="author" content="${client?.name ?? "SkillMarket AI"}">
+      <link rel="canonical" href="${url}">
+      <script>window.location.href="${url}"</script>
+    </head><body>Redirecting to <a href="${url}">${title}</a></body></html>`);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).send("Error");
+  }
+});
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

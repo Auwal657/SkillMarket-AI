@@ -327,6 +327,9 @@ export type ListProjectsParams = {
 category?: string;
 search?: string;
 status?: string;
+budgetMin?: number;
+budgetMax?: number;
+skills?: string;
 limit?: number;
 offset?: number;
 };

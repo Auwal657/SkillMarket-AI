@@ -15,6 +15,7 @@ export default function EditProfilePage() {
   const { data: fp } = useGetMyFreelancerProfile({ query: { enabled: user?.role === "freelancer", queryKey: ["fp-me"] } });
 
   const [userForm, setUserForm] = useState({ name: user?.name ?? "", university: user?.university ?? "", avatarUrl: user?.avatarUrl ?? "" });
+  const [clientForm, setClientForm] = useState({ companyName: "", companyDescription: "", companyLogoUrl: "", website: "" });
   const [fpForm, setFpForm] = useState({ headline: "", bio: "", hourlyRate: "", availabilityStatus: "available" as "available" | "busy" | "unavailable" });
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +28,14 @@ export default function EditProfilePage() {
     e.preventDefault();
     setError(""); setSuccess(false);
     try {
-      const updatedUser = await updateUserMutation.mutateAsync({ id: user!.id, data: { name: userForm.name, university: userForm.university || undefined, avatarUrl: userForm.avatarUrl || undefined } });
+      const body: Record<string, unknown> = { name: userForm.name, university: userForm.university || undefined, avatarUrl: userForm.avatarUrl || undefined };
+      if (user?.role === "client") {
+        body.companyName = clientForm.companyName || undefined;
+        body.companyDescription = clientForm.companyDescription || undefined;
+        body.companyLogoUrl = clientForm.companyLogoUrl || undefined;
+        body.website = clientForm.website || undefined;
+      }
+      const updatedUser = await updateUserMutation.mutateAsync({ id: user!.id, data: body as Parameters<typeof updateUserMutation.mutateAsync>[0]["data"] });
       updateUser(updatedUser as Parameters<typeof updateUser>[0]);
 
       if (user?.role === "freelancer") {
@@ -81,6 +89,30 @@ export default function EditProfilePage() {
             <label className="label">University / School <span className="text-gray-400 font-normal">optional</span></label>
             <input value={userForm.university} onChange={e => setUserForm(f => ({ ...f, university: e.target.value }))} className="input" />
           </div>
+
+          {user?.role === "client" && (
+            <>
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="font-semibold text-gray-900 mb-4">Company Profile</h3>
+              </div>
+              <div>
+                <label className="label">Company Name <span className="text-gray-400 font-normal">optional</span></label>
+                <input value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className="input" placeholder="e.g. Acme Corp" />
+              </div>
+              <div>
+                <label className="label">Company Description <span className="text-gray-400 font-normal">optional</span></label>
+                <textarea value={clientForm.companyDescription} onChange={e => setClientForm(f => ({ ...f, companyDescription: e.target.value }))} className="input min-h-24" placeholder="What does your company do?" />
+              </div>
+              <div>
+                <label className="label">Company Logo URL <span className="text-gray-400 font-normal">optional</span></label>
+                <input value={clientForm.companyLogoUrl} onChange={e => setClientForm(f => ({ ...f, companyLogoUrl: e.target.value }))} className="input" placeholder="https://..." />
+              </div>
+              <div>
+                <label className="label">Website <span className="text-gray-400 font-normal">optional</span></label>
+                <input value={clientForm.website} onChange={e => setClientForm(f => ({ ...f, website: e.target.value }))} className="input" placeholder="https://..." />
+              </div>
+            </>
+          )}
 
           {user?.role === "freelancer" && (
             <>

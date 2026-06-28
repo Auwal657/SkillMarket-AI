@@ -10,7 +10,6 @@ export const conversationsTable = pgTable("conversations", {
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  // P2: Conversation lookup by participant
   index("conversations_p1_idx").on(table.participant1Id),
   index("conversations_p2_idx").on(table.participant2Id),
 ]);
@@ -19,8 +18,11 @@ export const messagesTable = pgTable("messages", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull().references(() => conversationsTable.id, { onDelete: "cascade" }),
   senderId: integer("sender_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  content: text("content").notNull(),
+  content: text("content").notNull().default(""),
   isRead: boolean("is_read").notNull().default(false),
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

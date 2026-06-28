@@ -21,25 +21,31 @@ export default function FreelancersPage() {
   const [q, setQ] = useState(params.get("search") ?? "");
   const [skill, setSkill] = useState(params.get("skill") ?? "");
   const [availability, setAvailability] = useState(params.get("availability") ?? "");
+  const [rateMin, setRateMin] = useState("");
+  const [rateMax, setRateMax] = useState("");
   const [page, setPage] = useState(0);
   const limit = 12;
 
   const { data: allFreelancers, isLoading } = useListFreelancers({ search: q || undefined, skill: skill || undefined, limit: 100, offset: 0 });
 
   const freelancers = (allFreelancers ?? []).filter(f => {
-    if (!availability) return true;
-    return f.availabilityStatus === availability;
+    if (availability && f.availabilityStatus !== availability) return false;
+    if (rateMin && f.hourlyRate < parseFloat(rateMin)) return false;
+    if (rateMax && f.hourlyRate > parseFloat(rateMax)) return false;
+    return true;
   }).slice(page * limit, (page + 1) * limit);
 
   const totalFiltered = (allFreelancers ?? []).filter(f => {
-    if (!availability) return true;
-    return f.availabilityStatus === availability;
+    if (availability && f.availabilityStatus !== availability) return false;
+    if (rateMin && f.hourlyRate < parseFloat(rateMin)) return false;
+    if (rateMax && f.hourlyRate > parseFloat(rateMax)) return false;
+    return true;
   }).length;
 
   const hasMore = (page + 1) * limit < totalFiltered;
 
-  const clearFilters = () => { setQ(""); setSkill(""); setAvailability(""); setPage(0); };
-  const hasFilters = q || skill || availability;
+  const clearFilters = () => { setQ(""); setSkill(""); setAvailability(""); setRateMin(""); setRateMax(""); setPage(0); };
+  const hasFilters = q || skill || availability || rateMin || rateMax;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -65,6 +71,18 @@ export default function FreelancersPage() {
             <X size={14} /> Clear
           </button>
         )}
+      </div>
+      {/* Hourly rate range filter */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
+        <span className="text-xs font-medium text-gray-500">Hourly Rate:</span>
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" value={rateMin} onChange={e => { setRateMin(e.target.value); setPage(0); }}
+            placeholder="Min $" className="input w-24 py-1.5 text-sm" />
+          <span className="text-gray-400 text-sm">–</span>
+          <input type="number" min="0" value={rateMax} onChange={e => { setRateMax(e.target.value); setPage(0); }}
+            placeholder="Max $" className="input w-24 py-1.5 text-sm" />
+          <span className="text-xs text-gray-400">/hr</span>
+        </div>
       </div>
 
       {/* Skill quick-filters */}

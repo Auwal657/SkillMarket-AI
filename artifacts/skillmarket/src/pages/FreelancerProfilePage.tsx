@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
 import SkillBadge from "../components/common/SkillBadge";
 import StarRating from "../components/common/StarRating";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import ReportModal from "../components/common/ReportModal";
 import { formatCurrency, getAvailabilityColor, formatDate, cn } from "../lib/utils";
 
 interface Review {
@@ -35,6 +36,8 @@ export default function FreelancerProfilePage() {
   const [isSaved, setIsSaved] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveChecked, setSaveChecked] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [canReviewData, setCanReviewData] = useState<CanReviewData | null>(null);
@@ -71,6 +74,15 @@ export default function FreelancerProfilePage() {
       })
       .catch(() => setSaveChecked(true));
   }, [fid, user]);
+
+  // Fetch online presence for this freelancer's user
+  useEffect(() => {
+    if (!freelancer?.userId) return;
+    fetch(`/api/presence?ids=${freelancer.userId}`)
+      .then(r => r.ok ? r.json() : {})
+      .then((d: Record<number, boolean>) => setIsOnline(!!d[freelancer.userId!]))
+      .catch(() => {});
+  }, [freelancer?.userId]);
 
   const handleSaveProfile = async () => {
     if (!user) { navigate("/login"); return; }
@@ -148,16 +160,35 @@ export default function FreelancerProfilePage() {
         <ArrowLeft size={16} /> Back to Freelancers
       </Link>
 
+      {showReport && user && (
+        <ReportModal
+          targetType="user"
+          targetId={freelancer.userId ?? fid}
+          targetLabel={name}
+          onClose={() => setShowReport(false)}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Sidebar */}
         <div className="space-y-4">
           <div className="card p-6 text-center">
-            <Avatar name={name} avatarUrl={freelancer.user?.avatarUrl} size="xl" className="mx-auto mb-4" />
+            <div className="relative inline-block mb-4">
+              <Avatar name={name} avatarUrl={freelancer.user?.avatarUrl} size="xl" />
+              <span className={cn(
+                "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-white",
+                isOnline ? "bg-green-500" : "bg-gray-300"
+              )} />
+            </div>
             <h1 className="text-xl font-bold text-gray-900">{name}</h1>
             <p className="text-gray-500 text-sm mt-1">{freelancer.headline}</p>
             {freelancer.user?.university && (
               <p className="text-xs text-gray-400 mt-1">{freelancer.user.university}</p>
             )}
+            <div className="flex items-center justify-center gap-1.5 text-xs mt-1">
+              <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-green-500" : "bg-gray-300")} />
+              <span className={isOnline ? "text-green-600" : "text-gray-400"}>{isOnline ? "Online now" : "Offline"}</span>
+            </div>
             {freelancer.availabilityStatus && (
               <span className={cn("badge mt-3 inline-block", getAvailabilityColor(freelancer.availabilityStatus))}>
                 {freelancer.availabilityStatus}
@@ -210,6 +241,11 @@ export default function FreelancerProfilePage() {
               )}
               {!user && (
                 <Link href="/login" className="btn-secondary w-full justify-center text-sm">Sign In to Contact</Link>
+              )}
+              {user && user.id !== (freelancer.userId ?? fid) && (
+                <button onClick={() => setShowReport(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-colors">
+                  <Flag size={13} /> Report
+                </button>
               )}
             </div>
           </div>

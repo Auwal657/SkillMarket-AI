@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, ilike, or, sql, and, inArray } from "drizzle-orm";
+import { eq, ilike, or, sql, and, inArray, gte, lte } from "drizzle-orm";
 import { db, projectsTable, usersTable, applicationsTable, notificationsTable, freelancerProfilesTable } from "@workspace/db";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -44,6 +44,9 @@ router.get("/", async (req, res) => {
   const category = req.query.category as string | undefined;
   const search = req.query.search as string | undefined;
   const status = req.query.status as string | undefined;
+  const budgetMin = req.query.budgetMin ? parseFloat(req.query.budgetMin as string) : undefined;
+  const budgetMax = req.query.budgetMax ? parseFloat(req.query.budgetMax as string) : undefined;
+  const skills = req.query.skills as string | undefined;
   const limit = Math.min(parseInt(req.query.limit as string || "20", 10), 100);
   const offset = parseInt(req.query.offset as string || "0", 10);
 
@@ -53,6 +56,17 @@ router.get("/", async (req, res) => {
   if (category) conditions.push(ilike(projectsTable.category, `%${category}%`));
   if (search) conditions.push(or(ilike(projectsTable.title, `%${search}%`), ilike(projectsTable.description, `%${search}%`))!);
   if (status) conditions.push(eq(projectsTable.status, status as "open" | "in_progress" | "completed" | "cancelled"));
+  if (!isNaN(budgetMin as number) && budgetMin !== undefined) conditions.push(gte(projectsTable.budgetMax, budgetMin));
+  if (!isNaN(budgetMax as number) && budgetMax !== undefined) conditions.push(lte(projectsTable.budgetMin, budgetMax));
+  if (skills) {
+    const skillList = skills.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (skillList.length > 0) {
+      const skillConditions = skillList.map(s =>
+        sql`EXISTS (SELECT 1 FROM unnest(${projectsTable.requiredSkills}) AS skill WHERE lower(skill) LIKE ${`%${s}%`})`
+      );
+      conditions.push(skillConditions.length === 1 ? skillConditions[0] : or(...skillConditions)!);
+    }
+  }
 
   if (conditions.length > 0) {
     query = query.where(conditions.length === 1 ? conditions[0] : and(...conditions));

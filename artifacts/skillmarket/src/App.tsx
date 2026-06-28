@@ -26,6 +26,7 @@ import SavedPage from "./pages/SavedPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import NotFoundPage from "./pages/NotFoundPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import ClientProfilePage from "./pages/ClientProfilePage";
 
 export default function App() {
   return (
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/projects/:id" component={ProjectDetailPage} />
             <Route path="/freelancers" component={FreelancersPage} />
             <Route path="/freelancers/:id" component={FreelancerProfilePage} />
+            <Route path="/clients/:id" component={ClientProfilePage} />
             <Route path="/login" component={LoginPage} />
             <Route path="/register" component={RegisterPage} />
             <Route path="/forgot-password" component={ForgotPasswordPage} />

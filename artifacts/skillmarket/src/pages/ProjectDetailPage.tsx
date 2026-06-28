@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown, CheckSquare } from "lucide-react";
+import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown, CheckSquare, Share2, Flag } from "lucide-react";
+import ReportModal from "../components/common/ReportModal";
 import {
   useGetProject, useApplyToProject, useListProjectApplications,
   useUpdateApplicationStatus, useListMyApplications,
@@ -28,6 +29,8 @@ export default function ProjectDetailPage() {
   const [saveError, setSaveError] = useState("");
   const [updatingAppId, setUpdatingAppId] = useState<number | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const { data: project, isLoading, refetch: refetchProject } = useGetProject(pid, { query: { enabled: !!pid, queryKey: ["project", pid] } });
   const { data: applications, refetch: refetchApps } = useListProjectApplications(pid, {
@@ -127,6 +130,39 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      prompt("Copy this link:", url);
+    }
+  };
+
+  // OG / SEO meta update for project page
+  useEffect(() => {
+    if (!project) return;
+    const prev = document.title;
+    document.title = `${project.title} — SkillMarket AI`;
+    const setMeta = (name: string, content: string, prop = false) => {
+      const sel = prop ? `meta[property="${name}"]` : `meta[name="${name}"]`;
+      let el = document.querySelector(sel) as HTMLMetaElement | null;
+      if (!el) { el = document.createElement("meta"); prop ? el.setAttribute("property", name) : el.setAttribute("name", name); document.head.appendChild(el); }
+      el.setAttribute("content", content);
+    };
+    const desc = project.description.slice(0, 200);
+    setMeta("description", desc);
+    setMeta("og:title", `${project.title} — SkillMarket AI`, true);
+    setMeta("og:description", desc, true);
+    setMeta("og:url", window.location.href, true);
+    setMeta("og:type", "website", true);
+    setMeta("twitter:title", `${project.title} — SkillMarket AI`);
+    setMeta("twitter:description", desc);
+    return () => { document.title = prev; };
+  }, [project]);
+
   if (isLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
   if (!project) return <div className="text-center py-20 text-gray-500">Project not found</div>;
 
@@ -141,13 +177,34 @@ export default function ProjectDetailPage() {
         <ArrowLeft size={16} /> Back to Projects
       </Link>
 
+      {showReport && user && (
+        <ReportModal
+          targetType="project"
+          targetId={pid}
+          targetLabel={project.title}
+          onClose={() => setShowReport(false)}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main */}
         <div className="lg:col-span-2 space-y-6">
           <div className="card p-8">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="badge bg-indigo-100 text-indigo-700">{project.category}</span>
-              <span className={cn("badge", getStatusColor(project.status))}>{project.status.replace("_", " ")}</span>
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="badge bg-indigo-100 text-indigo-700">{project.category}</span>
+                <span className={cn("badge", getStatusColor(project.status))}>{project.status.replace("_", " ")}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={handleShare} className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-xl transition-colors", shareCopied ? "text-green-700 border-green-200 bg-green-50" : "text-gray-500 border-gray-200 hover:bg-gray-50")}>
+                  <Share2 size={13} /> {shareCopied ? "Copied!" : "Share"}
+                </button>
+                {user && !isOwner && (
+                  <button onClick={() => setShowReport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 border border-gray-200 rounded-xl hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors">
+                    <Flag size={13} /> Report
+                  </button>
+                )}
+              </div>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">{project.title}</h1>
             <p className="text-sm text-gray-400 mb-6">Posted by {project.clientName ?? "Client"} · {formatDate(project.createdAt)}</p>
