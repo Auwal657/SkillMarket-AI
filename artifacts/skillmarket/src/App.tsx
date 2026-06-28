@@ -30,6 +30,9 @@ import ClientProfilePage from "./pages/ClientProfilePage";
 import InvitationsPage from "./pages/InvitationsPage";
 import VerifyEmailPage from "./pages/auth/VerifyEmailPage";
 import UnverifiedBanner from "./components/common/UnverifiedBanner";
+import WalletPage from "./pages/WalletPage";
+import PaymentCallbackPage from "./pages/PaymentCallbackPage";
+import InvoicePage from "./pages/InvoicePage";
 
 export default function App() {
   return (
@@ -123,6 +126,17 @@ export default function App() {
             <Route path="/admin">
               <ProtectedRoute>
                 <AdminDashboard />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/wallet">
+              <ProtectedRoute>
+                <WalletPage />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/payment/callback" component={PaymentCallbackPage} />
+            <Route path="/invoices/:id">
+              <ProtectedRoute>
+                <InvoicePage />
               </ProtectedRoute>
             </Route>
             <Route component={NotFoundPage} />

@@ -12,6 +12,7 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import SkillBadge from "../components/common/SkillBadge";
 import Avatar from "../components/common/Avatar";
 import { formatCurrency, formatDate, getStatusColor, cn } from "../lib/utils";
+import EscrowPanel from "../components/common/EscrowPanel";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -408,6 +409,16 @@ export default function ProjectDetailPage() {
               </button>
               {saveError && <p className="text-xs text-red-500 text-center">{saveError}</p>}
             </>
+          )}
+
+          {/* Escrow payment panel — shown for in_progress projects */}
+          {["in_progress", "completed"].includes(project.status) && user && (
+            <EscrowPanel
+              projectId={pid}
+              projectStatus={project.status}
+              isClient={isOwner}
+              isFreelancer={user.role === "freelancer" && !isOwner}
+            />
           )}
 
           {isOwner && project.status === "open" && (

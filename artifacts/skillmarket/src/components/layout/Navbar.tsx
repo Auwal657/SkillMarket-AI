@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Bell, MessageCircle, Bookmark, Menu, X, ChevronDown, LogOut, Settings, LayoutDashboard, User } from "lucide-react";
+import { Bell, MessageCircle, Bookmark, Menu, X, ChevronDown, LogOut, LayoutDashboard, User, Wallet } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Avatar from "../common/Avatar";
 import { cn } from "../../lib/utils";
@@ -122,6 +122,9 @@ export default function Navbar() {
                       </Link>
                       <Link href="/profile/edit" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors" onClick={() => setUserMenuOpen(false)}>
                         <User size={16} /> Edit Profile
+                      </Link>
+                      <Link href="/wallet" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors" onClick={() => setUserMenuOpen(false)}>
+                        <Wallet size={16} /> Wallet
                       </Link>
                       <Link href="/notifications" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors sm:hidden" onClick={() => setUserMenuOpen(false)}>
                         <Bell size={16} /> Notifications

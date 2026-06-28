@@ -11,3 +11,8 @@ export * from "./notifications";
 export * from "./password_reset_tokens";
 export * from "./reports";
 export * from "./project_invitations";
+export * from "./wallets";
+export * from "./escrow_transactions";
+export * from "./wallet_transactions";
+export * from "./withdrawal_requests";
+export * from "./invoices";

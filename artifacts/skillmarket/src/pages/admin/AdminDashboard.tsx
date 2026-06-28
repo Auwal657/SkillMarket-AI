@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
   Users, FolderOpen, FileText, Star, Trash2, Shield, ShieldOff,
-  BarChart2, Clock, CheckCircle, XCircle, RefreshCw,
+  BarChart2, Clock, CheckCircle, XCircle, RefreshCw, Wallet,
 } from "lucide-react";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import Avatar from "../../components/common/Avatar";
@@ -38,13 +38,44 @@ interface Project {
   createdAt: string;
 }
 
-type Tab = "overview" | "users" | "projects";
+interface EscrowTx {
+  id: number;
+  projectId: number;
+  projectTitle: string | null;
+  clientName: string | null;
+  freelancerName: string | null;
+  amount: string;
+  status: string;
+  createdAt: string;
+  fundedAt: string | null;
+  releasedAt: string | null;
+}
+
+interface AdminWithdrawal {
+  id: number;
+  userId: number;
+  userName: string | null;
+  userEmail: string | null;
+  amount: string;
+  status: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  note: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  processedAt: string | null;
+}
+
+type Tab = "overview" | "users" | "projects" | "payments";
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("overview");
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [escrows, setEscrows] = useState<EscrowTx[]>([]);
+  const [withdrawals, setWithdrawals] = useState<AdminWithdrawal[]>([]);
   const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -85,11 +116,43 @@ export default function AdminDashboard() {
     } catch { setError("Network error"); } finally { setLoading(false); }
   };
 
+  const loadPayments = async () => {
+    setLoading(true);
+    try {
+      const [eRes, wRes] = await Promise.all([
+        fetch("/api/admin/payments/escrow", { credentials: "include" }),
+        fetch("/api/admin/payments/withdrawals", { credentials: "include" }),
+      ]);
+      if (eRes.ok) setEscrows(await eRes.json());
+      if (wRes.ok) setWithdrawals(await wRes.json());
+    } catch { setError("Network error"); } finally { setLoading(false); }
+  };
+
+  const processWithdrawal = async (id: number, status: "approved" | "rejected" | "completed", adminNote?: string) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`/api/admin/payments/withdrawals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status, adminNote }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, ...updated } : w));
+      } else {
+        const d = await res.json();
+        setError(d.error ?? "Failed to process withdrawal");
+      }
+    } finally { setActionLoading(null); }
+  };
+
   useEffect(() => {
     if (isAdmin !== true) return;
     if (tab === "overview") loadStats();
     else if (tab === "users") loadUsers();
     else if (tab === "projects") loadProjects();
+    else if (tab === "payments") loadPayments();
   }, [tab, isAdmin]);
 
   const toggleAdmin = async (user: User) => {
@@ -147,6 +210,7 @@ export default function AdminDashboard() {
     { key: "overview", label: "Overview", icon: BarChart2 },
     { key: "users", label: "Users", icon: Users },
     { key: "projects", label: "Projects", icon: FolderOpen },
+    { key: "payments", label: "Payments", icon: Wallet },
   ];
 
   const statusIcon: Record<string, React.ElementType> = {
@@ -169,7 +233,8 @@ export default function AdminDashboard() {
         <button onClick={() => {
           if (tab === "overview") loadStats();
           else if (tab === "users") loadUsers();
-          else loadProjects();
+          else if (tab === "projects") loadProjects();
+          else loadPayments();
         }} className="btn-secondary flex items-center gap-2 py-2 px-4 text-sm">
           <RefreshCw size={14} /> Refresh
         </button>
@@ -346,6 +411,154 @@ export default function AdminDashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : tab === "payments" ? (
+        <div className="space-y-8">
+          {/* Escrow Transactions */}
+          <div className="card overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Escrow Transactions ({escrows.length})</h3>
+            </div>
+            {escrows.length === 0 ? (
+              <div className="p-8 text-center text-gray-400 text-sm">No escrow transactions yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {["Project", "Client → Freelancer", "Amount", "Status", "Funded", "Actions"].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {escrows.map(e => (
+                      <tr key={e.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <Link href={`/projects/${e.projectId}`} className="font-medium text-indigo-600 hover:text-indigo-800 text-sm">
+                            {e.projectTitle ?? `Project #${e.projectId}`}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          {e.clientName ?? "—"} <span className="text-gray-400">→</span> {e.freelancerName ?? "—"}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-900">₦{parseFloat(e.amount).toLocaleString()}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn("badge capitalize", {
+                            in_escrow: "bg-indigo-100 text-indigo-700",
+                            released: "bg-green-100 text-green-700",
+                            pending: "bg-yellow-100 text-yellow-700",
+                            refunded: "bg-orange-100 text-orange-700",
+                            funded: "bg-blue-100 text-blue-700",
+                            cancelled: "bg-gray-100 text-gray-600",
+                          }[e.status] ?? "bg-gray-100 text-gray-600")}>
+                            {e.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{e.fundedAt ? formatDate(e.fundedAt) : "—"}</td>
+                        <td className="px-4 py-3">
+                          {["funded", "in_escrow"].includes(e.status) && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm("Issue refund for this escrow?")) return;
+                                setActionLoading(e.id);
+                                try {
+                                  await fetch(`/api/payments/refund/${e.projectId}`, { method: "POST", credentials: "include" });
+                                  loadPayments();
+                                } finally { setActionLoading(null); }
+                              }}
+                              disabled={actionLoading === e.id}
+                              className="text-xs px-3 py-1.5 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              Refund
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Withdrawal Requests */}
+          <div className="card overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Withdrawal Requests ({withdrawals.length})</h3>
+            </div>
+            {withdrawals.length === 0 ? (
+              <div className="p-8 text-center text-gray-400 text-sm">No withdrawal requests yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {["Freelancer", "Amount", "Bank Details", "Status", "Note", "Actions"].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {withdrawals.map(w => (
+                      <tr key={w.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900">{w.userName ?? "—"}</p>
+                          <p className="text-xs text-gray-400">{w.userEmail ?? "—"}</p>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-900">₦{parseFloat(w.amount).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          <p>{w.bankName}</p>
+                          <p className="font-mono">{w.accountNumber}</p>
+                          <p className="text-gray-400">{w.accountName}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn("badge capitalize", {
+                            pending: "bg-yellow-100 text-yellow-700",
+                            approved: "bg-blue-100 text-blue-700",
+                            completed: "bg-green-100 text-green-700",
+                            rejected: "bg-red-100 text-red-700",
+                          }[w.status] ?? "bg-gray-100 text-gray-600")}>
+                            {w.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">
+                          {w.note ?? "—"}
+                          {w.adminNote && <p className="text-indigo-600 mt-1 italic">Admin: {w.adminNote}</p>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {w.status === "pending" && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => processWithdrawal(w.id, "approved")}
+                                disabled={actionLoading === w.id}
+                                className="text-xs px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                              >Approve</button>
+                              <button
+                                onClick={() => processWithdrawal(w.id, "rejected", "Rejected by admin")}
+                                disabled={actionLoading === w.id}
+                                className="text-xs px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                              >Reject</button>
+                            </div>
+                          )}
+                          {w.status === "approved" && (
+                            <button
+                              onClick={() => processWithdrawal(w.id, "completed")}
+                              disabled={actionLoading === w.id}
+                              className="text-xs px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                            >Mark Done</button>
+                          )}
+                          {(w.status === "completed" || w.status === "rejected") && (
+                            <span className="text-xs text-gray-400">{w.processedAt ? formatDate(w.processedAt) : "Processed"}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

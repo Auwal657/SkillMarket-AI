@@ -3,6 +3,7 @@ import { eq, sql, desc } from "drizzle-orm";
 import {
   db, usersTable, projectsTable, applicationsTable,
   freelancerProfilesTable, reviewsTable,
+  escrowTransactionsTable, walletTransactionsTable, withdrawalRequestsTable, walletsTable,
 } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import type { Request, Response, NextFunction } from "express";
@@ -184,6 +185,128 @@ router.get("/me", requireAuth, async (req, res) => {
     .from(usersTable)
     .where(eq(usersTable.id, req.user!.userId));
   res.json({ isAdmin: user?.isAdmin ?? false });
+});
+
+// GET /api/admin/payments/escrow — all escrow transactions
+router.get("/payments/escrow", requireAuth, requireAdmin, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+  const offset = parseInt(req.query.offset as string || "0", 10);
+
+  const escrows = await db.select().from(escrowTransactionsTable)
+    .orderBy(desc(escrowTransactionsTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const projectIds = [...new Set(escrows.map(e => e.projectId))];
+  const clientIds = [...new Set(escrows.map(e => e.clientId))];
+  const freelancerIds = [...new Set(escrows.map(e => e.freelancerId))];
+  const allUserIds = [...new Set([...clientIds, ...freelancerIds])];
+
+  const [projects, users] = await Promise.all([
+    projectIds.length > 0
+      ? db.select({ id: projectsTable.id, title: projectsTable.title }).from(projectsTable)
+      : Promise.resolve([]),
+    allUserIds.length > 0
+      ? db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email }).from(usersTable)
+      : Promise.resolve([]),
+  ]);
+
+  const projMap = new Map((projects as { id: number; title: string }[]).map(p => [p.id, p.title]));
+  const userMap = new Map((users as { id: number; name: string; email: string }[]).map(u => [u.id, u]));
+
+  const enriched = escrows.map(e => ({
+    ...e,
+    projectTitle: projMap.get(e.projectId) ?? null,
+    clientName: userMap.get(e.clientId)?.name ?? null,
+    freelancerName: userMap.get(e.freelancerId)?.name ?? null,
+  }));
+
+  res.json(enriched);
+});
+
+// GET /api/admin/payments/transactions — all wallet transactions
+router.get("/payments/transactions", requireAuth, requireAdmin, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+  const offset = parseInt(req.query.offset as string || "0", 10);
+
+  const txns = await db.select().from(walletTransactionsTable)
+    .orderBy(desc(walletTransactionsTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  res.json(txns);
+});
+
+// GET /api/admin/payments/withdrawals — all withdrawal requests
+router.get("/payments/withdrawals", requireAuth, requireAdmin, async (req, res) => {
+  const requests = await db.select().from(withdrawalRequestsTable)
+    .orderBy(desc(withdrawalRequestsTable.createdAt))
+    .limit(200);
+
+  const userIds = [...new Set(requests.map(r => r.userId))];
+  const users = userIds.length > 0
+    ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email }).from(usersTable)
+    : [];
+  const userMap = new Map((users as { id: number; name: string; email: string }[]).map(u => [u.id, u]));
+
+  const enriched = requests.map(r => ({
+    ...r,
+    userName: userMap.get(r.userId)?.name ?? null,
+    userEmail: userMap.get(r.userId)?.email ?? null,
+  }));
+
+  res.json(enriched);
+});
+
+// PATCH /api/admin/payments/withdrawals/:id — approve, reject or complete a withdrawal
+router.patch("/payments/withdrawals/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { status, adminNote } = req.body as { status?: string; adminNote?: string };
+  if (!status || !["approved", "rejected", "completed"].includes(status)) {
+    res.status(400).json({ error: "status must be approved, rejected or completed" }); return;
+  }
+
+  const [wr] = await db.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.id, id));
+  if (!wr) { res.status(404).json({ error: "Withdrawal request not found" }); return; }
+  if (wr.status === "completed" || wr.status === "rejected") {
+    res.status(400).json({ error: "Cannot update a completed or rejected request" }); return;
+  }
+
+  // If rejecting, refund the held amount back to wallet
+  if (status === "rejected") {
+    const [wallet] = await db.select().from(walletsTable).where(eq(walletsTable.id, wr.walletId));
+    if (wallet) {
+      const currentBalance = parseFloat(wallet.balance);
+      const refundedBalance = currentBalance + parseFloat(String(wr.amount));
+      await Promise.all([
+        db.update(walletsTable).set({ balance: String(refundedBalance) }).where(eq(walletsTable.id, wallet.id)),
+        db.insert(walletTransactionsTable).values({
+          walletId: wallet.id,
+          userId: wr.userId,
+          type: "credit",
+          category: "refund",
+          amount: String(wr.amount),
+          balanceBefore: String(currentBalance),
+          balanceAfter: String(refundedBalance),
+          reference: `WDR-REJ-${wr.id}`,
+          description: "Withdrawal request rejected — funds returned",
+        }),
+      ]);
+    }
+  }
+
+  const [updated] = await db.update(withdrawalRequestsTable)
+    .set({
+      status: status as "approved" | "rejected" | "completed",
+      adminNote: adminNote ?? null,
+      processedAt: new Date(),
+    })
+    .where(eq(withdrawalRequestsTable.id, id))
+    .returning();
+
+  res.json(updated);
 });
 
 export default router;

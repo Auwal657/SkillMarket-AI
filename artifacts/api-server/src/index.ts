@@ -25,6 +25,8 @@ import adminRoutes from "./routes/admin";
 import reportsRoutes from "./routes/reports";
 import uploadsRoutes from "./routes/uploads";
 import invitationsRoutes from "./routes/invitations";
+import paymentsRoutes from "./routes/payments";
+import walletRoutes from "./routes/wallet";
 
 // S1: Validate required secrets at startup before anything else
 if (!process.env.JWT_SECRET) {
@@ -115,6 +117,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/uploads", uploadsRoutes);
 app.use("/api/invitations", invitationsRoutes);
+app.use("/api/payments", paymentsRoutes);
+app.use("/api/wallet", walletRoutes);
 
 // Serve uploaded files as static assets
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

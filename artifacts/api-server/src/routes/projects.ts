@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { releaseEscrow } from "./payments";
 import { eq, ilike, or, sql, and, inArray, gte, lte } from "drizzle-orm";
 import { db, projectsTable, usersTable, applicationsTable, notificationsTable, freelancerProfilesTable } from "@workspace/db";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
@@ -205,6 +206,9 @@ router.patch("/:id/complete", requireAuth, requireRole("client"), async (req, re
       link: `/freelancers`,
     }).catch(() => {});
   }
+
+  // Auto-release escrow if it was funded
+  releaseEscrow(id).catch(() => {});
 
   const [[client], [appCount]] = await Promise.all([
     db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.clientId)),
