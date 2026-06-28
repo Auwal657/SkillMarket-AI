@@ -29,9 +29,9 @@ export default function ManageSkillsPage() {
 
   const grouped = availableSkills.reduce((acc, s) => {
     if (!acc[s.category]) acc[s.category] = [];
-    acc[s.category].push(s);
+    acc[s.category]!.push(s);
     return acc;
-  }, {} as Record<string, typeof catalog>);
+  }, {} as Record<string, { id: number; name: string; category: string }[]>);
 
   const handleAdd = async () => {
     if (!selectedSkillId) { setError("Please select a skill"); return; }

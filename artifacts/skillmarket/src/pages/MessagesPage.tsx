@@ -38,6 +38,7 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recipientInitiated = useRef<string | null>(null);
 
   const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
 
@@ -57,18 +58,24 @@ export default function MessagesPage() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
-    if (recipientId && token) {
-      const start = async () => {
-        const res = await fetch(`${BASE}/messages`, { method: "POST", headers, body: JSON.stringify({ recipientId: parseInt(recipientId), content: "Hi! I'd like to get in touch." }) });
-        if (res.ok) {
-          const msg = await res.json();
-          await fetchConversations();
-          setActiveConv(msg.conversationId);
-        }
-      };
-      start();
-    }
-  }, [recipientId]);
+    if (!recipientId || !token) return;
+    if (recipientInitiated.current === recipientId) return;
+    recipientInitiated.current = recipientId;
+
+    const start = async () => {
+      const res = await fetch(`${BASE}/messages`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ recipientId: parseInt(recipientId), content: "Hi! I'd like to get in touch." }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        await fetchConversations();
+        setActiveConv(msg.conversationId);
+      }
+    };
+    start();
+  }, [recipientId, token]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();

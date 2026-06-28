@@ -123,6 +123,7 @@ export interface FreelancerProfile {
   /** @nullable */
   averageRating?: number | null;
   totalReviews?: number;
+  profileViews?: number;
   skills?: FreelancerSkill[];
   portfolio?: PortfolioItem[];
   createdAt: string;

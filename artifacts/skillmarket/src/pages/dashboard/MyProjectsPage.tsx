@@ -57,10 +57,13 @@ export default function MyProjectsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <Link href={`/projects/${p.id}`} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                  <Link href={`/projects/${p.id}`} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View">
                     <Eye size={16} />
                   </Link>
-                  <button onClick={() => handleDelete(p.id)} disabled={deleting === p.id} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <Link href={`/projects/${p.id}/edit`} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                    <Edit size={16} />
+                  </Link>
+                  <button onClick={() => handleDelete(p.id)} disabled={deleting === p.id} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                     {deleting === p.id ? <span className="animate-spin w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full block" /> : <Trash2 size={16} />}
                   </button>
                 </div>

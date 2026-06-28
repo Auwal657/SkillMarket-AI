@@ -6,6 +6,7 @@ import HomePage from "./pages/HomePage";
 import ProjectsPage from "./pages/ProjectsPage";
 import FreelancersPage from "./pages/FreelancersPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
+import EditProjectPage from "./pages/EditProjectPage";
 import FreelancerProfilePage from "./pages/FreelancerProfilePage";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
@@ -32,6 +33,11 @@ export default function App() {
           <Switch>
             <Route path="/" component={HomePage} />
             <Route path="/projects" component={ProjectsPage} />
+            <Route path="/projects/:id/edit">
+              <ProtectedRoute role="client">
+                <EditProjectPage />
+              </ProtectedRoute>
+            </Route>
             <Route path="/projects/:id" component={ProjectDetailPage} />
             <Route path="/freelancers" component={FreelancersPage} />
             <Route path="/freelancers/:id" component={FreelancerProfilePage} />

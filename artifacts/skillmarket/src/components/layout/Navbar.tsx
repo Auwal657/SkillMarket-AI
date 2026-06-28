@@ -1,18 +1,59 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Bell, MessageCircle, Bookmark, Menu, X, ChevronDown, LogOut, Settings, LayoutDashboard, User } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Avatar from "../common/Avatar";
 import { cn } from "../../lib/utils";
 
+function useUnreadCounts(token: string | null, userId: number | undefined) {
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    if (!token || !userId) {
+      setUnreadNotifs(0);
+      setUnreadMessages(0);
+      return;
+    }
+
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const fetchCounts = async () => {
+      try {
+        const [nRes, mRes] = await Promise.all([
+          fetch("/api/notifications", { headers }),
+          fetch("/api/messages/conversations", { headers }),
+        ]);
+        if (nRes.ok) {
+          const notifs = await nRes.json();
+          setUnreadNotifs(notifs.filter((n: { isRead: boolean }) => !n.isRead).length);
+        }
+        if (mRes.ok) {
+          const convs = await mRes.json();
+          setUnreadMessages(convs.reduce((sum: number, c: { unreadCount: number }) => sum + (c.unreadCount ?? 0), 0));
+        }
+      } catch {
+        // silent
+      }
+    };
+
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => clearInterval(interval);
+  }, [token, userId]);
+
+  return { unreadNotifs, unreadMessages };
+}
+
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const isActive = (path: string) => location === path;
+  const { unreadNotifs, unreadMessages } = useUnreadCounts(token, user?.id);
 
+  const isActive = (path: string) => location === path;
   const dashboardHref = user?.role === "client" ? "/dashboard/client" : "/dashboard";
 
   return (
@@ -39,11 +80,21 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             {user ? (
               <>
-                <Link href="/notifications" className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors hidden sm:flex">
+                <Link href="/notifications" className="relative p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors hidden sm:flex">
                   <Bell size={20} />
+                  {unreadNotifs > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center leading-none">
+                      {unreadNotifs > 9 ? "9+" : unreadNotifs}
+                    </span>
+                  )}
                 </Link>
-                <Link href="/messages" className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors hidden sm:flex">
+                <Link href="/messages" className="relative p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors hidden sm:flex">
                   <MessageCircle size={20} />
+                  {unreadMessages > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-indigo-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center leading-none">
+                      {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
                 </Link>
                 <Link href="/saved" className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors hidden sm:flex">
                   <Bookmark size={20} />
@@ -75,9 +126,11 @@ export default function Navbar() {
                       </Link>
                       <Link href="/notifications" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors sm:hidden" onClick={() => setUserMenuOpen(false)}>
                         <Bell size={16} /> Notifications
+                        {unreadNotifs > 0 && <span className="ml-auto w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">{unreadNotifs}</span>}
                       </Link>
                       <Link href="/messages" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors sm:hidden" onClick={() => setUserMenuOpen(false)}>
                         <MessageCircle size={16} /> Messages
+                        {unreadMessages > 0 && <span className="ml-auto w-5 h-5 bg-indigo-600 text-white rounded-full text-xs flex items-center justify-center">{unreadMessages}</span>}
                       </Link>
                       <Link href="/saved" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors sm:hidden" onClick={() => setUserMenuOpen(false)}>
                         <Bookmark size={16} /> Saved

@@ -66,7 +66,7 @@ export default function MyApplicationsPage() {
                     <span className={cn("badge", getStatusColor(app.status))}>{app.status}</span>
                     <span className="text-xs text-gray-400">{formatDate(app.createdAt)}</span>
                   </div>
-                  <Link href={`/projects/${app.projectId}`} className="font-semibold text-gray-900 hover:text-indigo-600 transition-colors text-lg">{(app as Record<string, unknown>).projectTitle as string ?? "Project"}</Link>
+                  <Link href={`/projects/${app.projectId}`} className="font-semibold text-gray-900 hover:text-indigo-600 transition-colors text-lg">{(app as unknown as { projectTitle?: string }).projectTitle ?? "Project"}</Link>
                   <p className="text-sm text-gray-500 mt-1">Proposed rate: <span className="font-medium text-gray-700">{formatCurrency(app.proposedRate)}/hr</span></p>
                   <p className="text-sm text-gray-600 mt-3 line-clamp-2 italic">"{app.coverLetter}"</p>
                 </div>

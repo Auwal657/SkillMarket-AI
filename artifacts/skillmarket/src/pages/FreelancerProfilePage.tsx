@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, Star, MapPin, DollarSign, Briefcase, Eye, MessageCircle, Bookmark, ExternalLink, Send } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
@@ -12,11 +12,50 @@ import { formatCurrency, getAvailabilityColor, cn } from "../lib/utils";
 export default function FreelancerProfilePage() {
   const { id } = useParams<{ id: string }>();
   const fid = parseInt(id, 10);
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [, navigate] = useLocation();
-  const [savedMsg, setSavedMsg] = useState(false);
+
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [saveChecked, setSaveChecked] = useState(false);
 
   const { data: freelancer, isLoading } = useGetFreelancer(fid, { query: { enabled: !!fid, queryKey: ["freelancer", fid] } });
+
+  useEffect(() => {
+    if (!token || !fid) return;
+    fetch(`/api/saved/check?itemType=freelancer&itemId=${fid}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.saved !== undefined) setIsSaved(d.saved);
+        setSaveChecked(true);
+      })
+      .catch(() => setSaveChecked(true));
+  }, [fid, token]);
+
+  const handleSaveProfile = async () => {
+    if (!user) { navigate("/login"); return; }
+    setSavingProfile(true);
+    try {
+      const method = isSaved ? "DELETE" : "POST";
+      await fetch("/api/saved", {
+        method,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ itemType: "freelancer", itemId: fid }),
+      });
+      setIsSaved(!isSaved);
+    } catch {
+      // silent
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleContact = () => {
+    if (!user) { navigate("/login"); return; }
+    navigate(`/messages?recipient=${freelancer?.userId}`);
+  };
 
   if (isLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
   if (!freelancer) return <div className="text-center py-20 text-gray-500">Freelancer not found</div>;
@@ -28,11 +67,6 @@ export default function FreelancerProfilePage() {
     acc[cat].push(s);
     return acc;
   }, {} as Record<string, typeof freelancer.skills>);
-
-  const handleContact = () => {
-    if (!user) { navigate("/login"); return; }
-    navigate(`/messages?recipient=${freelancer.userId}`);
-  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -48,12 +82,10 @@ export default function FreelancerProfilePage() {
             <h1 className="text-xl font-bold text-gray-900">{name}</h1>
             <p className="text-gray-500 text-sm mt-1">{freelancer.headline}</p>
             {freelancer.user?.university && (
-              <div className="flex items-center justify-center gap-1 mt-2 text-xs text-gray-400">
-                <MapPin size={12} /> {freelancer.user.university}
-              </div>
+              <p className="text-xs text-gray-400 mt-1">{freelancer.user.university}</p>
             )}
             {freelancer.availabilityStatus && (
-              <span className={cn("badge mt-3", getAvailabilityColor(freelancer.availabilityStatus))}>
+              <span className={cn("badge mt-3 inline-block", getAvailabilityColor(freelancer.availabilityStatus))}>
                 {freelancer.availabilityStatus}
               </span>
             )}
@@ -87,20 +119,36 @@ export default function FreelancerProfilePage() {
                   <MessageCircle size={16} /> Contact
                 </button>
               )}
-              <button onClick={() => setSavedMsg(true)} className={cn("w-full justify-center flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors", savedMsg ? "border-indigo-200 bg-indigo-50 text-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50")}>
-                <Bookmark size={16} className={savedMsg ? "fill-current" : ""} />
-                {savedMsg ? "Saved!" : "Save Profile"}
-              </button>
+              {user && (
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={savingProfile || !saveChecked}
+                  className={cn(
+                    "w-full justify-center flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors disabled:opacity-60",
+                    isSaved
+                      ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  )}
+                >
+                  <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
+                  {savingProfile ? "Saving..." : isSaved ? "Saved" : "Save Profile"}
+                </button>
+              )}
+              {!user && (
+                <Link href="/login" className="btn-secondary w-full justify-center text-sm">Sign In to Contact</Link>
+              )}
             </div>
           </div>
         </div>
 
         {/* Main */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="card p-6">
-            <h2 className="font-semibold text-gray-900 mb-3">About</h2>
-            <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{freelancer.bio}</p>
-          </div>
+          {freelancer.bio && (
+            <div className="card p-6">
+              <h2 className="font-semibold text-gray-900 mb-3">About</h2>
+              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{freelancer.bio}</p>
+            </div>
+          )}
 
           {Object.entries(skillsByCategory).map(([category, catSkills]) => (
             <div key={category} className="card p-6">

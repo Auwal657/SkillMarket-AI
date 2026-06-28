@@ -1,25 +1,72 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle } from "lucide-react";
-import { useGetProject, useApplyToProject, useListProjectApplications } from "@workspace/api-client-react";
+import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown } from "lucide-react";
+import {
+  useGetProject, useApplyToProject, useListProjectApplications,
+  useUpdateApplicationStatus, useListMyApplications,
+} from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import SkillBadge from "../components/common/SkillBadge";
+import Avatar from "../components/common/Avatar";
 import { formatCurrency, formatDate, getStatusColor, cn } from "../lib/utils";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const pid = parseInt(id, 10);
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+
   const [applying, setApplying] = useState(false);
   const [form, setForm] = useState({ coverLetter: "", proposedRate: "" });
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
+  const [updatingAppId, setUpdatingAppId] = useState<number | null>(null);
 
   const { data: project, isLoading } = useGetProject(pid, { query: { enabled: !!pid, queryKey: ["project", pid] } });
-  const { data: applications } = useListProjectApplications(pid, { query: { enabled: !!user && user.role === "client" && !!pid, queryKey: ["project-apps", pid] } });
+  const { data: applications, refetch: refetchApps } = useListProjectApplications(pid, {
+    query: { enabled: !!user && user.role === "client" && !!pid, queryKey: ["project-apps", pid] },
+  });
+  const { data: myApplications } = useListMyApplications({
+    query: { enabled: !!user && user.role === "freelancer", queryKey: ["my-applications"] },
+  });
+
   const applyMutation = useApplyToProject();
+  const updateStatusMutation = useUpdateApplicationStatus();
+
+  const alreadyApplied = user?.role === "freelancer" && (myApplications ?? []).some(a => a.projectId === pid);
+
+  useEffect(() => {
+    if (!token || !pid) return;
+    fetch(`/api/saved/check?itemType=project&itemId=${pid}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => { if (d.saved !== undefined) setIsSaved(d.saved); })
+      .catch(() => {});
+  }, [pid, token]);
+
+  const handleSaveProject = async () => {
+    if (!user) { navigate("/login"); return; }
+    setSavingProject(true);
+    try {
+      const method = isSaved ? "DELETE" : "POST";
+      await fetch("/api/saved", {
+        method,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ itemType: "project", itemId: pid }),
+      });
+      setIsSaved(!isSaved);
+    } catch {
+      // silent
+    } finally {
+      setSavingProject(false);
+    }
+  };
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,9 +79,23 @@ export default function ProjectDetailPage() {
       await applyMutation.mutateAsync({ data: { projectId: pid, coverLetter: form.coverLetter, proposedRate: rate } });
       setSuccess(true);
       setApplying(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/applications/my"] });
     } catch (err: unknown) {
       const msg = (err as { data?: { error?: string } })?.data?.error ?? "Failed to apply";
       setError(msg);
+    }
+  };
+
+  const handleUpdateStatus = async (appId: number, status: "accepted" | "rejected") => {
+    setUpdatingAppId(appId);
+    try {
+      await updateStatusMutation.mutateAsync({ id: appId, data: { status } });
+      await refetchApps();
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", pid] });
+    } catch {
+      alert(`Failed to ${status} application`);
+    } finally {
+      setUpdatingAppId(null);
     }
   };
 
@@ -80,28 +141,59 @@ export default function ProjectDetailPage() {
               <h2 className="font-semibold text-gray-900 mb-4">Applications ({applications.length})</h2>
               <div className="space-y-4">
                 {applications.map(app => (
-                  <div key={app.id} className="p-4 border border-gray-100 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <Link href={`/freelancers/${app.freelancerId}`} className="font-medium text-indigo-600 hover:text-indigo-800">{app.freelancerName ?? "Freelancer"}</Link>
-                      <div className="flex items-center gap-2">
+                  <div key={app.id} className="p-4 border border-gray-100 rounded-xl hover:border-indigo-100 transition-colors">
+                    <div className="flex items-start justify-between mb-2 gap-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={app.freelancerName ?? "F"} size="sm" />
+                        <div>
+                          <Link href={`/freelancers/${app.freelancerId}`} className="font-medium text-indigo-600 hover:text-indigo-800 text-sm">{app.freelancerName ?? "Freelancer"}</Link>
+                          {app.freelancerHeadline && <p className="text-xs text-gray-400">{app.freelancerHeadline}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={cn("badge", getStatusColor(app.status))}>{app.status}</span>
-                        <span className="font-semibold text-gray-900">{formatCurrency(app.proposedRate)}/hr</span>
+                        <span className="font-semibold text-gray-900 text-sm">{formatCurrency(app.proposedRate)}/hr</span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 line-clamp-3">{app.coverLetter}</p>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-3">{app.coverLetter}</p>
+                    {app.status === "pending" && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleUpdateStatus(app.id, "accepted")}
+                          disabled={updatingAppId === app.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {updatingAppId === app.id ? <span className="animate-spin w-3 h-3 border border-white border-t-transparent rounded-full" /> : <ThumbsUp size={12} />}
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleUpdateStatus(app.id, "rejected")}
+                          disabled={updatingAppId === app.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium rounded-lg border border-red-200 transition-colors disabled:opacity-50"
+                        >
+                          {updatingAppId === app.id ? <span className="animate-spin w-3 h-3 border border-red-600 border-t-transparent rounded-full" /> : <ThumbsDown size={12} />}
+                          Reject
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {isOwner && applications && applications.length === 0 && (
+            <div className="card p-6 text-center text-gray-400 text-sm">No applications yet. Share your project to attract talent.</div>
+          )}
+
           {/* Apply form */}
           {canApply && project.status === "open" && (
             <div className="card p-6">
               <h2 className="font-semibold text-gray-900 mb-4">Apply to this Project</h2>
-              {success ? (
+              {success || alreadyApplied ? (
                 <div className="flex items-center gap-3 text-green-700 bg-green-50 rounded-xl p-4">
-                  <CheckCircle size={20} /> Application submitted successfully!
+                  <CheckCircle size={20} />
+                  {alreadyApplied && !success ? "You've already applied to this project." : "Application submitted successfully!"}
                 </div>
               ) : applying ? (
                 <form onSubmit={handleApply} className="space-y-4">
@@ -119,7 +211,7 @@ export default function ProjectDetailPage() {
                     <button type="submit" disabled={applyMutation.isPending} className="btn-primary">
                       {applyMutation.isPending ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <><Send size={16} /> Submit Application</>}
                     </button>
-                    <button type="button" onClick={() => setApplying(false)} className="btn-secondary">Cancel</button>
+                    <button type="button" onClick={() => { setApplying(false); setError(""); }} className="btn-secondary">Cancel</button>
                   </div>
                 </form>
               ) : (
@@ -176,9 +268,31 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
+          {user && !isOwner && (
+            <button
+              onClick={handleSaveProject}
+              disabled={savingProject}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors",
+                isSaved
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
+              {savingProject ? "Saving..." : isSaved ? "Saved" : "Save Project"}
+            </button>
+          )}
+
+          {isOwner && (
+            <Link href={`/projects/${pid}/edit`} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              Edit Project
+            </Link>
+          )}
+
           {!user && (
             <div className="card p-6 text-center">
-              <p className="text-sm text-gray-600 mb-4">Sign in to apply or contact the client</p>
+              <p className="text-sm text-gray-600 mb-4">Sign in to apply or save this project</p>
               <div className="space-y-2">
                 <Link href="/login" className="btn-primary w-full justify-center">Sign In</Link>
                 <Link href="/register" className="btn-secondary w-full justify-center text-sm">Create Account</Link>
