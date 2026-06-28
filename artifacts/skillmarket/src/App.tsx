@@ -14,6 +14,8 @@ import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import FreelancerDashboard from "./pages/dashboard/FreelancerDashboard";
 import ClientDashboard from "./pages/dashboard/ClientDashboard";
+import FreelancerAnalytics from "./pages/dashboard/FreelancerAnalytics";
+import ClientAnalytics from "./pages/dashboard/ClientAnalytics";
 import MyApplicationsPage from "./pages/dashboard/MyApplicationsPage";
 import MyProjectsPage from "./pages/dashboard/MyProjectsPage";
 import PostProjectPage from "./pages/PostProjectPage";
@@ -58,9 +60,19 @@ export default function App() {
             <Route path="/forgot-password" component={ForgotPasswordPage} />
             <Route path="/reset-password" component={ResetPasswordPage} />
             <Route path="/verify-email" component={VerifyEmailPage} />
+            <Route path="/dashboard/analytics">
+              <ProtectedRoute role="freelancer">
+                <FreelancerAnalytics />
+              </ProtectedRoute>
+            </Route>
             <Route path="/dashboard">
               <ProtectedRoute role="freelancer">
                 <FreelancerDashboard />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/dashboard/client/analytics">
+              <ProtectedRoute role="client">
+                <ClientAnalytics />
               </ProtectedRoute>
             </Route>
             <Route path="/dashboard/client">

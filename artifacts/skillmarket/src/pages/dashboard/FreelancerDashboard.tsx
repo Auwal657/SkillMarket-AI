@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { DollarSign, FileText, CheckCircle, Eye, Star, Zap, ArrowRight, TrendingUp, RefreshCw } from "lucide-react";
+import { DollarSign, FileText, CheckCircle, Eye, Star, Zap, ArrowRight, TrendingUp, RefreshCw, BarChart2 } from "lucide-react";
 import { useGetFreelancerDashboard, useGetAiRecommendations, getGetAiRecommendationsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
@@ -117,6 +117,9 @@ export default function FreelancerDashboard() {
               </Link>
               <Link href="/saved" className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-sm text-gray-700">
                 <Star size={16} className="text-indigo-500" /> Saved Projects
+              </Link>
+              <Link href="/dashboard/analytics" className="flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-50 transition-colors text-sm text-indigo-700 font-medium border border-indigo-100 mt-1">
+                <BarChart2 size={16} className="text-indigo-500" /> View My Analytics
               </Link>
             </div>
           </div>

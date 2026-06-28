@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Briefcase, Users, DollarSign, FolderOpen, Plus, ArrowRight, TrendingUp, Zap, RefreshCw, Star, CheckCircle } from "lucide-react";
+import { Briefcase, Users, DollarSign, FolderOpen, Plus, ArrowRight, TrendingUp, Zap, RefreshCw, Star, CheckCircle, BarChart2 } from "lucide-react";
 import { useGetClientDashboard, useGetAiFreelancerRecommendations, getGetAiFreelancerRecommendationsQueryKey } from "@workspace/api-client-react";
 import type { ProjectFreelancerRecommendations, FreelancerRecommendation } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -209,6 +209,9 @@ export default function ClientDashboard() {
               </Link>
               <Link href="/profile/edit" className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors text-sm text-gray-700">
                 <TrendingUp size={16} className="text-indigo-500" /> Edit Profile
+              </Link>
+              <Link href="/dashboard/client/analytics" className="flex items-center gap-3 p-3 rounded-xl hover:bg-indigo-50 transition-colors text-sm text-indigo-700 font-medium border border-indigo-100 mt-1">
+                <BarChart2 size={16} className="text-indigo-500" /> View Analytics
               </Link>
             </div>
           </div>
