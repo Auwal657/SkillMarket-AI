@@ -3,12 +3,14 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorModal from "@replit/vite-plugin-runtime-error-modal";
+import { cartographer } from "@replit/vite-plugin-cartographer";
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     runtimeErrorModal(),
+    cartographer(),
   ],
   resolve: {
     alias: {
