@@ -96,13 +96,13 @@
     @apply bg-gray-200 rounded animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite];
   }
   .skeleton-text {
-    @apply skeleton h-4 w-3/4;
+    @apply bg-gray-200 rounded animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite] h-4 w-3/4;
   }
   .skeleton-circle {
-    @apply skeleton rounded-full;
+    @apply bg-gray-200 rounded-full animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite];
   }
   .skeleton-card {
-    @apply card p-6 space-y-4;
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4;
   }
 
   .page-container {

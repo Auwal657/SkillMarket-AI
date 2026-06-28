@@ -4,7 +4,7 @@ import { Search, ArrowRight, Star, Shield, Zap, Users, Briefcase, TrendingUp, Ch
 import { useListFreelancers, useListProjects } from "@workspace/api-client-react";
 import FreelancerCard from "../components/common/FreelancerCard";
 import ProjectCard from "../components/common/ProjectCard";
-import { cn } from "../../lib/utils";
+import { cn } from "../lib/utils";
 
 const CATEGORIES = [
   { icon: Code, name: "Development", color: "bg-blue-50 text-blue-600 ring-1 ring-blue-200/50", skills: ["React", "Node.js", "Python"] },

@@ -57,6 +57,8 @@ export interface User {
   university?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  /** @nullable */
+  emailVerified?: boolean | null;
   createdAt: string;
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck, MapPin, Award } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck, MapPin, Award, CheckCircle } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
