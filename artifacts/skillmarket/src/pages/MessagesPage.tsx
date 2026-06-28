@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearch } from "wouter";
 import { MessageCircle, Send } from "lucide-react";
+import { io as socketIO, Socket } from "socket.io-client";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -20,9 +21,24 @@ interface Message {
   content: string;
   createdAt: string;
   isRead: boolean;
+  conversationId?: number;
 }
 
 const BASE = "/api";
+
+let _socket: Socket | null = null;
+function getSocket(): Socket {
+  if (!_socket) {
+    _socket = socketIO("/", {
+      path: "/socket.io",
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+  }
+  return _socket;
+}
 
 export default function MessagesPage() {
   const { id: convIdParam } = useParams<{ id?: string }>();
@@ -38,11 +54,12 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [recipientInfo, setRecipientInfo] = useState<{ id: number; name: string; avatarUrl?: string | null; role: string } | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recipientOpened = useRef<string | null>(null);
   const activeConvRef = useRef<number | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
-  // Keep ref in sync so polling callbacks always see current value
   activeConvRef.current = activeConv;
 
   const fetchConversations = useCallback(async () => {
@@ -56,6 +73,48 @@ export default function MessagesPage() {
     if (res.ok) { const data = await res.json(); setMessages(data); }
   }, []);
 
+  // Socket.IO setup
+  useEffect(() => {
+    if (!user) return;
+    const socket = getSocket();
+    socketRef.current = socket;
+
+    const onConnect = () => setSocketConnected(true);
+    const onDisconnect = () => setSocketConnected(false);
+
+    const onNewMessage = (msg: Message) => {
+      if (msg.conversationId === activeConvRef.current) {
+        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+        socket.emit("conversation:read", msg.conversationId);
+      }
+      fetchConversations();
+    };
+
+    const onConversationUpdated = () => { fetchConversations(); };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("message:new", onNewMessage);
+    socket.on("conversation:updated", onConversationUpdated);
+    if (socket.connected) setSocketConnected(true);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("message:new", onNewMessage);
+      socket.off("conversation:updated", onConversationUpdated);
+    };
+  }, [user, fetchConversations]);
+
+  // Join/leave conversation socket room
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !activeConv) return;
+    socket.emit("join:conversation", activeConv);
+    socket.emit("conversation:read", activeConv);
+    return () => { socket.emit("leave:conversation", activeConv); };
+  }, [activeConv]);
+
   // Initial load
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
@@ -67,22 +126,17 @@ export default function MessagesPage() {
   // Auto-scroll to bottom when messages update
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Poll active conversation every 3s for new messages
+  // Fallback polling when socket is not connected
   useEffect(() => {
-    if (!activeConv) return;
-    const interval = setInterval(() => {
+    if (socketConnected) return;
+    const convInterval = setInterval(() => fetchConversations(), 10000);
+    const msgInterval = setInterval(() => {
       if (activeConvRef.current) fetchMessages(activeConvRef.current);
     }, 3000);
-    return () => clearInterval(interval);
-  }, [activeConv, fetchMessages]);
+    return () => { clearInterval(convInterval); clearInterval(msgInterval); };
+  }, [socketConnected, fetchConversations, fetchMessages]);
 
-  // Poll conversation list every 10s to update unread counts and last messages
-  useEffect(() => {
-    const interval = setInterval(() => { fetchConversations(); }, 10000);
-    return () => clearInterval(interval);
-  }, [fetchConversations]);
-
-  // When arriving via ?recipient=X, open an existing conversation if one exists
+  // When arriving via ?recipient=X
   useEffect(() => {
     if (!recipientId || !user) return;
     if (recipientOpened.current === recipientId) return;
@@ -110,42 +164,63 @@ export default function MessagesPage() {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMsg.trim() || !activeConv) return;
+    const content = newMsg.trim();
     setSending(true);
     try {
       const conv = conversations.find(c => c.id === activeConv);
       const otherId = conv?.otherUser?.id;
       if (!otherId) return;
-      await fetch(`${BASE}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ recipientId: otherId, content: newMsg.trim() }),
-      });
-      setNewMsg("");
-      await fetchMessages(activeConv);
-      await fetchConversations();
+
+      const socket = socketRef.current;
+      if (socket?.connected) {
+        socket.emit("message:send", { recipientId: otherId, content });
+        setNewMsg("");
+      } else {
+        // REST fallback
+        await fetch(`${BASE}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ recipientId: otherId, content }),
+        });
+        setNewMsg("");
+        await fetchMessages(activeConv);
+        await fetchConversations();
+      }
     } finally {
       setSending(false);
     }
   };
 
-  // Handle sending first message to a new recipient (no existing conversation yet)
   const handleSendToNewRecipient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMsg.trim() || !recipientId) return;
+    const content = newMsg.trim();
     setSending(true);
     try {
-      const res = await fetch(`${BASE}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ recipientId: parseInt(recipientId), content: newMsg.trim() }),
-      });
-      if (res.ok) {
-        const msg = await res.json();
+      const socket = socketRef.current;
+      if (socket?.connected) {
+        socket.emit("message:send", { recipientId: parseInt(recipientId), content });
         setNewMsg("");
-        await fetchConversations();
-        setActiveConv(msg.conversationId);
+        setTimeout(async () => {
+          await fetchConversations();
+          const convs: Conversation[] = await fetch(`${BASE}/messages/conversations`, { credentials: "include" }).then(r => r.json()).catch(() => []);
+          const created = convs.find((c: Conversation) => c.otherUser?.id === parseInt(recipientId));
+          if (created) setActiveConv(created.id);
+        }, 600);
+      } else {
+        const res = await fetch(`${BASE}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ recipientId: parseInt(recipientId), content }),
+        });
+        if (res.ok) {
+          const msg = await res.json();
+          setNewMsg("");
+          await fetchConversations();
+          setActiveConv(msg.conversationId);
+        }
       }
     } finally {
       setSending(false);

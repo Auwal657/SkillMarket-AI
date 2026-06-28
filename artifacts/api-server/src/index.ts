@@ -1,3 +1,4 @@
+import http from "http";
 import express from "express";
 import cors from "cors";
 import compression from "compression";
@@ -5,6 +6,7 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
 import { logger } from "./lib/logger";
+import { initSocket } from "./lib/socket";
 import authRoutes from "./routes/auth";
 import usersRoutes from "./routes/users";
 import freelancersRoutes from "./routes/freelancers";
@@ -17,6 +19,7 @@ import reviewsRoutes from "./routes/reviews";
 import messagesRoutes from "./routes/messages";
 import notificationsRoutes from "./routes/notifications";
 import savedRoutes from "./routes/saved";
+import adminRoutes from "./routes/admin";
 
 // S1: Validate required secrets at startup before anything else
 if (!process.env.JWT_SECRET) {
@@ -103,6 +106,7 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/saved", savedRoutes);
 app.use("/api/portfolio", portfolioRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
@@ -113,7 +117,10 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
+httpServer.listen(PORT, "0.0.0.0", () => {
   logger.info(`API server listening on port ${PORT}`);
 });
 

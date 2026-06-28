@@ -23,11 +23,19 @@ function useWithdrawApplication() {
   });
 }
 
+const STATUS_TABS = [
+  { key: "", label: "All" },
+  { key: "pending", label: "Pending" },
+  { key: "accepted", label: "Accepted" },
+  { key: "rejected", label: "Rejected" },
+];
+
 export default function MyApplicationsPage() {
   const { data: applications, isLoading } = useListMyApplications();
   const withdrawMutation = useWithdrawApplication();
   const queryClient = useQueryClient();
   const [withdrawing, setWithdrawing] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
 
   const handleWithdraw = async (id: number) => {
     if (!confirm("Withdraw this application? This cannot be undone.")) return;
@@ -49,6 +57,15 @@ export default function MyApplicationsPage() {
     withdrawn: "You withdrew this application",
   };
 
+  const filtered = statusFilter
+    ? (applications ?? []).filter(a => a.status === statusFilter)
+    : (applications ?? []);
+
+  const counts = (applications ?? []).reduce<Record<string, number>>((acc, a) => {
+    acc[a.status] = (acc[a.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="flex items-center justify-between mb-8">
@@ -59,11 +76,31 @@ export default function MyApplicationsPage() {
         <Link href="/projects" className="btn-primary text-sm py-2 px-4">Find Projects</Link>
       </div>
 
+      {/* Status filter tabs */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-6 w-fit">
+        {STATUS_TABS.map(tab => {
+          const count = tab.key ? (counts[tab.key] ?? 0) : (applications?.length ?? 0);
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+                statusFilter === tab.key ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              {tab.label}
+              {!isLoading && <span className={cn("text-xs px-1.5 py-0.5 rounded-full", statusFilter === tab.key ? "bg-indigo-100 text-indigo-700" : "bg-gray-200 text-gray-500")}>{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>
-      ) : applications && applications.length > 0 ? (
+      ) : filtered.length > 0 ? (
         <div className="space-y-4">
-          {applications.map(app => (
+          {filtered.map(app => (
             <div key={app.id} className="card p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">

@@ -23,6 +23,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import SavedPage from "./pages/SavedPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import NotFoundPage from "./pages/NotFoundPage";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 export default function App() {
   return (
@@ -101,6 +102,11 @@ export default function App() {
             <Route path="/saved">
               <ProtectedRoute>
                 <SavedPage />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/admin">
+              <ProtectedRoute>
+                <AdminDashboard />
               </ProtectedRoute>
             </Route>
             <Route component={NotFoundPage} />
