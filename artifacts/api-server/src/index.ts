@@ -18,23 +18,55 @@ import messagesRoutes from "./routes/messages";
 import notificationsRoutes from "./routes/notifications";
 import savedRoutes from "./routes/saved";
 
+// S1: Validate required secrets at startup before anything else
+if (!process.env.JWT_SECRET) {
+  logger.error("FATAL: JWT_SECRET is not set. Add it to your Replit secrets and restart.");
+  process.exit(1);
+}
+
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "8080", 10);
 
 app.set("trust proxy", 1);
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+// S3: Restrict CORS to known origins; reflect any origin in development
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : null;
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow same-origin requests (no Origin header) and non-browser clients
+      if (!origin) return callback(null, true);
+      // In production, only allow explicitly listed origins
+      if (ALLOWED_ORIGINS) {
+        return callback(null, ALLOWED_ORIGINS.includes(origin));
+      }
+      // In development (no ALLOWED_ORIGINS set), allow any origin
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 app.use(compression());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+// S8: Tighten body limit — 1mb is plenty; 10mb was excessive
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/api/healthz" } }));
+
+// S5: Separate, stricter limiter for registration (5 per 15 min per IP)
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many registration attempts, please try again later." },
+});
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -53,6 +85,7 @@ const generalLimiter = rateLimit({
 
 app.use("/api", generalLimiter);
 app.use("/api/auth", authLimiter);
+app.use("/api/auth/register", registerLimiter);
 
 app.get("/api/healthz", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

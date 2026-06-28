@@ -8,7 +8,7 @@ import {
   CreateFreelancerProfileBody, UpdateFreelancerProfileBody,
   AddSkillBody, AddPortfolioItemBody,
 } from "@workspace/api-zod";
-import { requireAuth, requireRole } from "../lib/auth";
+import { requireAuth, requireRole, optionalAuth } from "../lib/auth";
 
 const router = Router();
 
@@ -32,18 +32,49 @@ function buildProfile(profile: Record<string, unknown>, user: Record<string, unk
   };
 }
 
-// IMPORTANT: /me routes MUST come before /:id to avoid Express matching "me" as an id
+// P1: Batch-fetch skills and portfolio for a list of profile IDs
+async function attachSkillsAndPortfolio(profileIds: number[]) {
+  if (profileIds.length === 0) return { skillsMap: new Map(), portfolioMap: new Map() };
+
+  const [allSkills, allPortfolio] = await Promise.all([
+    db.select({
+      id: freelancerSkillsTable.id,
+      freelancerProfileId: freelancerSkillsTable.freelancerProfileId,
+      skillId: freelancerSkillsTable.skillId,
+      skillName: skillsTable.name,
+      skillCategory: skillsTable.category,
+      proficiencyLevel: freelancerSkillsTable.proficiencyLevel,
+    })
+      .from(freelancerSkillsTable)
+      .innerJoin(skillsTable, eq(freelancerSkillsTable.skillId, skillsTable.id))
+      .where(inArray(freelancerSkillsTable.freelancerProfileId, profileIds)),
+    db.select().from(portfolioItemsTable).where(inArray(portfolioItemsTable.freelancerProfileId, profileIds)),
+  ]);
+
+  const skillsMap = new Map<number, typeof allSkills>();
+  const portfolioMap = new Map<number, typeof allPortfolio>();
+
+  for (const s of allSkills) {
+    if (!skillsMap.has(s.freelancerProfileId)) skillsMap.set(s.freelancerProfileId, []);
+    skillsMap.get(s.freelancerProfileId)!.push(s);
+  }
+  for (const p of allPortfolio) {
+    if (!portfolioMap.has(p.freelancerProfileId)) portfolioMap.set(p.freelancerProfileId, []);
+    portfolioMap.get(p.freelancerProfileId)!.push(p);
+  }
+
+  return { skillsMap, portfolioMap };
+}
+
+// IMPORTANT: /me routes MUST come before /:id
 router.get("/me", requireAuth, async (req, res) => {
   const [profile] = await db.select().from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
   if (!profile) { res.status(404).json({ error: "No freelancer profile found" }); return; }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.userId));
-  const skills = await db.select({ id: freelancerSkillsTable.id, skillId: freelancerSkillsTable.skillId, skillName: skillsTable.name, skillCategory: skillsTable.category, proficiencyLevel: freelancerSkillsTable.proficiencyLevel })
-    .from(freelancerSkillsTable).innerJoin(skillsTable, eq(freelancerSkillsTable.skillId, skillsTable.id))
-    .where(eq(freelancerSkillsTable.freelancerProfileId, profile.id));
-  const portfolio = await db.select().from(portfolioItemsTable).where(eq(portfolioItemsTable.freelancerProfileId, profile.id));
+  const { skillsMap, portfolioMap } = await attachSkillsAndPortfolio([profile.id]);
 
-  res.json(buildProfile(profile as Record<string, unknown>, user as Record<string, unknown>, skills, portfolio));
+  res.json(buildProfile(profile as Record<string, unknown>, user as Record<string, unknown>, skillsMap.get(profile.id) ?? [], portfolioMap.get(profile.id) ?? []));
 });
 
 router.post("/me", requireAuth, requireRole("freelancer"), async (req, res) => {
@@ -83,15 +114,12 @@ router.patch("/me", requireAuth, requireRole("freelancer"), async (req, res) => 
     : [profile];
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.userId));
-  const skills = await db.select({ id: freelancerSkillsTable.id, skillId: freelancerSkillsTable.skillId, skillName: skillsTable.name, skillCategory: skillsTable.category, proficiencyLevel: freelancerSkillsTable.proficiencyLevel })
-    .from(freelancerSkillsTable).innerJoin(skillsTable, eq(freelancerSkillsTable.skillId, skillsTable.id))
-    .where(eq(freelancerSkillsTable.freelancerProfileId, profile.id));
-  const portfolio = await db.select().from(portfolioItemsTable).where(eq(portfolioItemsTable.freelancerProfileId, profile.id));
+  const { skillsMap, portfolioMap } = await attachSkillsAndPortfolio([profile.id]);
 
-  res.json(buildProfile(updated as Record<string, unknown>, user as Record<string, unknown>, skills, portfolio));
+  res.json(buildProfile(updated as Record<string, unknown>, user as Record<string, unknown>, skillsMap.get(profile.id) ?? [], portfolioMap.get(profile.id) ?? []));
 });
 
-// Skills sub-routes (also /me/* before /:id)
+// Skills sub-routes
 router.get("/me/skills", requireAuth, async (req, res) => {
   const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
   if (!profile) { res.status(404).json({ error: "No freelancer profile" }); return; }
@@ -185,9 +213,9 @@ router.get("/", async (req, res) => {
     const matchingSkills = await db.select({ id: skillsTable.id }).from(skillsTable).where(ilike(skillsTable.name, `%${skill}%`));
     if (matchingSkills.length === 0) { res.json([]); return; }
     const skillIds = matchingSkills.map(s => s.id);
-    const profiles = await db.select({ freelancerProfileId: freelancerSkillsTable.freelancerProfileId })
+    const matched = await db.select({ freelancerProfileId: freelancerSkillsTable.freelancerProfileId })
       .from(freelancerSkillsTable).where(inArray(freelancerSkillsTable.skillId, skillIds));
-    profileIds = [...new Set(profiles.map(p => p.freelancerProfileId))];
+    profileIds = [...new Set(matched.map(p => p.freelancerProfileId))];
     if (profileIds.length === 0) { res.json([]); return; }
   }
 
@@ -200,43 +228,44 @@ router.get("/", async (req, res) => {
   if (profileIds !== null) conditions.push(inArray(freelancerProfilesTable.id, profileIds));
   if (search) conditions.push(or(ilike(usersTable.name, `%${search}%`), ilike(freelancerProfilesTable.headline, `%${search}%`), ilike(freelancerProfilesTable.bio, `%${search}%`))!);
 
-  if (conditions.length > 0) {
-    query = query.where(conditions.length === 1 ? conditions[0] : sql`${conditions[0]} AND ${conditions[1]}`);
-  }
+  if (conditions.length === 1) query = query.where(conditions[0]);
+  else if (conditions.length === 2) query = query.where(sql`${conditions[0]} AND ${conditions[1]}`);
 
   const profiles = await query.limit(limit).offset(offset);
+  if (profiles.length === 0) { res.json([]); return; }
 
-  const result = await Promise.all(profiles.map(async ({ profile, user }) => {
-    const skills = await db.select({ id: freelancerSkillsTable.id, skillId: freelancerSkillsTable.skillId, skillName: skillsTable.name, skillCategory: skillsTable.category, proficiencyLevel: freelancerSkillsTable.proficiencyLevel })
-      .from(freelancerSkillsTable).innerJoin(skillsTable, eq(freelancerSkillsTable.skillId, skillsTable.id))
-      .where(eq(freelancerSkillsTable.freelancerProfileId, profile.id));
-    const portfolio = await db.select().from(portfolioItemsTable).where(eq(portfolioItemsTable.freelancerProfileId, profile.id));
-    return buildProfile(profile as Record<string, unknown>, user as Record<string, unknown>, skills, portfolio);
-  }));
+  // P1: Batch all skills and portfolio in 2 queries total
+  const pIds = profiles.map(({ profile }) => profile.id);
+  const { skillsMap, portfolioMap } = await attachSkillsAndPortfolio(pIds);
+
+  const result = profiles.map(({ profile, user }) =>
+    buildProfile(profile as Record<string, unknown>, user as Record<string, unknown>, skillsMap.get(profile.id) ?? [], portfolioMap.get(profile.id) ?? [])
+  );
 
   res.json(result);
 });
 
-// Public freelancer profile by id — increment profile views
-router.get("/:id", async (req, res) => {
+// Public freelancer profile by id — optionalAuth for B2 (exclude owner view)
+router.get("/:id", optionalAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [profile] = await db.select().from(freelancerProfilesTable).where(eq(freelancerProfilesTable.id, id));
   if (!profile) { res.status(404).json({ error: "Freelancer not found" }); return; }
 
-  // Increment profile views
-  await db.update(freelancerProfilesTable)
-    .set({ profileViews: sql`${freelancerProfilesTable.profileViews} + 1` })
-    .where(eq(freelancerProfilesTable.id, id));
+  // B2: Only increment views if the requester is NOT the profile owner
+  const isOwner = req.user?.userId === profile.userId;
+  if (!isOwner) {
+    await db.update(freelancerProfilesTable)
+      .set({ profileViews: sql`${freelancerProfilesTable.profileViews} + 1` })
+      .where(eq(freelancerProfilesTable.id, id));
+  }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, profile.userId));
-  const skills = await db.select({ id: freelancerSkillsTable.id, skillId: freelancerSkillsTable.skillId, skillName: skillsTable.name, skillCategory: skillsTable.category, proficiencyLevel: freelancerSkillsTable.proficiencyLevel })
-    .from(freelancerSkillsTable).innerJoin(skillsTable, eq(freelancerSkillsTable.skillId, skillsTable.id))
-    .where(eq(freelancerSkillsTable.freelancerProfileId, profile.id));
-  const portfolio = await db.select().from(portfolioItemsTable).where(eq(portfolioItemsTable.freelancerProfileId, profile.id));
+  const { skillsMap, portfolioMap } = await attachSkillsAndPortfolio([profile.id]);
 
-  res.json(buildProfile({ ...profile, profileViews: (profile.profileViews ?? 0) + 1 } as Record<string, unknown>, user as Record<string, unknown>, skills, portfolio));
+  const returnedViews = isOwner ? (profile.profileViews ?? 0) : (profile.profileViews ?? 0) + 1;
+  res.json(buildProfile({ ...profile, profileViews: returnedViews } as Record<string, unknown>, user as Record<string, unknown>, skillsMap.get(profile.id) ?? [], portfolioMap.get(profile.id) ?? []));
 });
 
 router.get("/:id/portfolio", async (req, res) => {

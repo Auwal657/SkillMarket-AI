@@ -10,26 +10,26 @@ import { Link } from "wouter";
 const BASE = "/api";
 
 export default function SavedPage() {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [tab, setTab] = useState<"projects" | "freelancers">("projects");
   const [savedProjects, setSavedProjects] = useState<unknown[]>([]);
   const [savedFreelancers, setSavedFreelancers] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const headers = { Authorization: `Bearer ${token}` };
-
   useEffect(() => {
+    if (!user) { setLoading(false); return; }
     const fetchSaved = async () => {
+      // S2: credentials: "include" sends the httpOnly auth cookie automatically
       const [pRes, fRes] = await Promise.all([
-        fetch(`${BASE}/saved/projects`, { headers }),
-        fetch(`${BASE}/saved/freelancers`, { headers }),
+        fetch(`${BASE}/saved/projects`, { credentials: "include" }),
+        fetch(`${BASE}/saved/freelancers`, { credentials: "include" }),
       ]);
       if (pRes.ok) setSavedProjects(await pRes.json());
       if (fRes.ok) setSavedFreelancers(await fRes.json());
       setLoading(false);
     };
     fetchSaved();
-  }, []);
+  }, [user]);
 
   if (loading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
 

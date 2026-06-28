@@ -1,17 +1,18 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
 import App from "./App";
 import "./index.css";
+
+// S2: Auth is now handled by httpOnly cookies set by the server.
+// We no longer call setAuthTokenGetter — cookies are sent automatically
+// with every request via credentials: "include" in customFetch.
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, staleTime: 30_000 },
   },
 });
-
-setAuthTokenGetter(() => localStorage.getItem("sm_token"));
 
 const root = document.getElementById("root")!;
 createRoot(root).render(

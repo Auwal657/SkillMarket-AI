@@ -30,7 +30,7 @@ export default function MessagesPage() {
   const params = new URLSearchParams(search);
   const recipientId = params.get("recipient");
 
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeConv, setActiveConv] = useState<number | null>(convIdParam ? parseInt(convIdParam) : null);
@@ -38,18 +38,19 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recipientInitiated = useRef<string | null>(null);
+  // B5: Track whether we've already opened the recipient conversation to prevent
+  // re-sending the auto message on every render cycle
+  const recipientOpened = useRef<string | null>(null);
 
-  const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
-
+  // S2: All fetches use credentials: "include" — cookie auth handles auth automatically
   const fetchConversations = async () => {
-    const res = await fetch(`${BASE}/messages/conversations`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${BASE}/messages/conversations`, { credentials: "include" });
     if (res.ok) { const data = await res.json(); setConversations(data); }
     setLoading(false);
   };
 
   const fetchMessages = async (convId: number) => {
-    const res = await fetch(`${BASE}/messages/${convId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${BASE}/messages/${convId}`, { credentials: "include" });
     if (res.ok) { const data = await res.json(); setMessages(data); }
   };
 
@@ -57,25 +58,28 @@ export default function MessagesPage() {
   useEffect(() => { if (activeConv) { fetchMessages(activeConv); } }, [activeConv]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  // B5: When arriving via ?recipient=X, open (or create) the conversation WITHOUT
+  // auto-sending a "Hi!" message — let the user compose their own first message.
   useEffect(() => {
-    if (!recipientId || !token) return;
-    if (recipientInitiated.current === recipientId) return;
-    recipientInitiated.current = recipientId;
+    if (!recipientId || !user) return;
+    if (recipientOpened.current === recipientId) return;
+    recipientOpened.current = recipientId;
 
-    const start = async () => {
-      const res = await fetch(`${BASE}/messages`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ recipientId: parseInt(recipientId), content: "Hi! I'd like to get in touch." }),
-      });
-      if (res.ok) {
-        const msg = await res.json();
-        await fetchConversations();
-        setActiveConv(msg.conversationId);
+    const openConversation = async () => {
+      // Check if a conversation with this recipient already exists
+      const res = await fetch(`${BASE}/messages/conversations`, { credentials: "include" });
+      if (!res.ok) return;
+      const convs: Conversation[] = await res.json();
+      setConversations(convs);
+
+      const existing = convs.find(c => c.otherUser?.id === parseInt(recipientId));
+      if (existing) {
+        setActiveConv(existing.id);
       }
+      // If no existing conversation, the user will start one by sending their first message
     };
-    start();
-  }, [recipientId, token]);
+    openConversation();
+  }, [recipientId, user]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +89,12 @@ export default function MessagesPage() {
       const conv = conversations.find(c => c.id === activeConv);
       const otherId = conv?.otherUser?.id;
       if (!otherId) return;
-      await fetch(`${BASE}/messages`, { method: "POST", headers, body: JSON.stringify({ recipientId: otherId, content: newMsg.trim() }) });
+      await fetch(`${BASE}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ recipientId: otherId, content: newMsg.trim() }),
+      });
       setNewMsg("");
       await fetchMessages(activeConv);
       await fetchConversations();
@@ -94,7 +103,33 @@ export default function MessagesPage() {
     }
   };
 
+  // Handle sending first message to a new recipient (no existing conversation yet)
+  const handleSendToNewRecipient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMsg.trim() || !recipientId) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${BASE}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ recipientId: parseInt(recipientId), content: newMsg.trim() }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setNewMsg("");
+        await fetchConversations();
+        setActiveConv(msg.conversationId);
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
+
+  const activeConvData = conversations.find(c => c.id === activeConv);
+  const isNewRecipient = recipientId && !activeConv && !conversations.find(c => c.otherUser?.id === parseInt(recipientId));
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -126,18 +161,15 @@ export default function MessagesPage() {
         {activeConv ? (
           <div className="flex-1 flex flex-col">
             <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-              {(() => {
-                const conv = conversations.find(c => c.id === activeConv);
-                return conv?.otherUser ? (
-                  <>
-                    <Avatar name={conv.otherUser.name} avatarUrl={conv.otherUser.avatarUrl} size="sm" />
-                    <div>
-                      <p className="font-semibold text-sm text-gray-900">{conv.otherUser.name}</p>
-                      <p className="text-xs text-gray-400 capitalize">{conv.otherUser.role}</p>
-                    </div>
-                  </>
-                ) : null;
-              })()}
+              {activeConvData?.otherUser ? (
+                <>
+                  <Avatar name={activeConvData.otherUser.name} avatarUrl={activeConvData.otherUser.avatarUrl} size="sm" />
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{activeConvData.otherUser.name}</p>
+                    <p className="text-xs text-gray-400 capitalize">{activeConvData.otherUser.role}</p>
+                  </div>
+                </>
+              ) : null}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map(msg => {
@@ -155,6 +187,21 @@ export default function MessagesPage() {
             </div>
             <form onSubmit={handleSend} className="p-4 border-t border-gray-100 flex gap-3">
               <input value={newMsg} onChange={e => setNewMsg(e.target.value)} className="input flex-1 py-2.5" placeholder="Type a message..." />
+              <button type="submit" disabled={sending || !newMsg.trim()} className="btn-primary px-4 py-2.5 disabled:opacity-50">
+                <Send size={18} />
+              </button>
+            </form>
+          </div>
+        ) : isNewRecipient ? (
+          <div className="flex-1 flex flex-col">
+            <div className="p-4 border-b border-gray-100">
+              <p className="text-sm font-medium text-gray-700">New conversation</p>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-400 text-sm">Send a message to start the conversation</p>
+            </div>
+            <form onSubmit={handleSendToNewRecipient} className="p-4 border-t border-gray-100 flex gap-3">
+              <input value={newMsg} onChange={e => setNewMsg(e.target.value)} className="input flex-1 py-2.5" placeholder="Type your first message..." />
               <button type="submit" disabled={sending || !newMsg.trim()} className="btn-primary px-4 py-2.5 disabled:opacity-50">
                 <Send size={18} />
               </button>

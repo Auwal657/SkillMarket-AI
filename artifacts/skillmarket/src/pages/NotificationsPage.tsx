@@ -18,29 +18,31 @@ interface Notification {
 const BASE = "/api";
 
 export default function NotificationsPage() {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const headers = { Authorization: `Bearer ${token}` };
-
   const fetchNotifications = async () => {
-    const res = await fetch(`${BASE}/notifications`, { headers });
+    // S2: credentials: "include" sends the httpOnly auth cookie automatically
+    const res = await fetch(`${BASE}/notifications`, { credentials: "include" });
     if (res.ok) { const data = await res.json(); setNotifications(data); }
     setLoading(false);
   };
 
   const markRead = async (id: number) => {
-    await fetch(`${BASE}/notifications/${id}/read`, { method: "PATCH", headers });
+    await fetch(`${BASE}/notifications/${id}/read`, { method: "PATCH", credentials: "include" });
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
   };
 
   const markAllRead = async () => {
-    await fetch(`${BASE}/notifications/read-all`, { method: "PATCH", headers });
+    await fetch(`${BASE}/notifications/read-all`, { method: "PATCH", credentials: "include" });
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 
-  useEffect(() => { fetchNotifications(); }, []);
+  useEffect(() => {
+    if (user) fetchNotifications();
+    else setLoading(false);
+  }, [user]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 

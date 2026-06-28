@@ -6,10 +6,23 @@ import { requireAuth } from "../lib/auth";
 const router = Router();
 
 router.get("/", requireAuth, async (req, res) => {
+  // P7: Add pagination — default to 50 most recent; client can override with ?limit & ?offset
+  const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+  const offset = parseInt(req.query.offset as string || "0", 10);
+
   const notifications = await db.select().from(notificationsTable)
     .where(eq(notificationsTable.userId, req.user!.userId))
-    .orderBy(sql`${notificationsTable.createdAt} DESC`).limit(50);
+    .orderBy(sql`${notificationsTable.createdAt} DESC`)
+    .limit(limit)
+    .offset(offset);
   res.json(notifications);
+});
+
+// B3: /read-all MUST be registered BEFORE /:id/read so Express doesn't match
+// "read-all" as an :id parameter and return 404
+router.patch("/read-all", requireAuth, async (req, res) => {
+  await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.userId, req.user!.userId));
+  res.json({ message: "All notifications marked as read" });
 });
 
 router.patch("/:id/read", requireAuth, async (req, res) => {
@@ -22,11 +35,6 @@ router.patch("/:id/read", requireAuth, async (req, res) => {
 
   await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.id, id));
   res.json({ message: "Marked as read" });
-});
-
-router.patch("/read-all", requireAuth, async (req, res) => {
-  await db.update(notificationsTable).set({ isRead: true }).where(eq(notificationsTable.userId, req.user!.userId));
-  res.json({ message: "All notifications marked as read" });
 });
 
 export default router;

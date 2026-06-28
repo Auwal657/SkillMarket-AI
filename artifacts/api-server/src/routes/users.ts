@@ -6,7 +6,19 @@ import { requireAuth } from "../lib/auth";
 
 const router = Router();
 
-router.get("/:id", async (req, res) => {
+// S6: Validate avatar URL — must be https:// only to prevent javascript: and data: URIs
+function isValidAvatarUrl(url: string | null | undefined): boolean {
+  if (!url) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+// S9: Require authentication to view a user profile (prevents unauthenticated enumeration)
+router.get("/:id", requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
@@ -29,6 +41,12 @@ router.patch("/:id", requireAuth, async (req, res) => {
   const parsed = UpdateUserBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" });
+    return;
+  }
+
+  // S6: Validate avatar URL before persisting
+  if (parsed.data.avatarUrl && !isValidAvatarUrl(parsed.data.avatarUrl)) {
+    res.status(400).json({ error: "avatarUrl must be a valid https:// URL" });
     return;
   }
 

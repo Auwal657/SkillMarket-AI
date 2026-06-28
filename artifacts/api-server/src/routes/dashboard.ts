@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, inArray } from "drizzle-orm";
 import {
   db, applicationsTable, projectsTable, freelancerProfilesTable,
   freelancerSkillsTable, skillsTable,
@@ -20,9 +20,20 @@ router.get("/freelancer", requireAuth, requireRole("freelancer"), async (req, re
     .where(eq(applicationsTable.freelancerId, req.user!.userId))
     .orderBy(sql`${applicationsTable.createdAt} DESC`).limit(10);
 
-  const recentWithTitles = await Promise.all(recentApplications.map(async (app) => {
-    const [project] = await db.select({ title: projectsTable.title }).from(projectsTable).where(eq(projectsTable.id, app.projectId));
-    return { ...app, projectTitle: project?.title ?? null, freelancerName: null, freelancerHeadline: null };
+  // P1: Batch query project titles instead of N individual queries
+  const projectIds = [...new Set(recentApplications.map(a => a.projectId))];
+  const projects = projectIds.length > 0
+    ? await db.select({ id: projectsTable.id, title: projectsTable.title })
+        .from(projectsTable)
+        .where(inArray(projectsTable.id, projectIds))
+    : [];
+  const titleMap = new Map(projects.map(p => [p.id, p.title]));
+
+  const recentWithTitles = recentApplications.map(app => ({
+    ...app,
+    projectTitle: titleMap.get(app.projectId) ?? null,
+    freelancerName: null,
+    freelancerHeadline: null,
   }));
 
   res.json({
@@ -40,25 +51,40 @@ router.get("/client", requireAuth, requireRole("client"), async (req, res) => {
   const totalProjectsPosted = allProjects.length;
   const openProjects = allProjects.filter(p => p.status === "open").length;
 
-  const projectIds = allProjects.map(p => p.id);
+  // B8/P1: Batch all application data in a single query — no per-project loop
   let totalApplicationsReceived = 0;
   let totalSpent = 0;
 
-  for (const pid of projectIds) {
-    const apps = await db.select().from(applicationsTable).where(eq(applicationsTable.projectId, pid));
-    totalApplicationsReceived += apps.length;
-    const accepted = apps.filter(a => a.status === "accepted");
-    totalSpent += accepted.reduce((sum, a) => sum + a.proposedRate, 0);
+  if (allProjects.length > 0) {
+    const projectIds = allProjects.map(p => p.id);
+    const allApps = await db.select({
+      projectId: applicationsTable.projectId,
+      status: applicationsTable.status,
+      proposedRate: applicationsTable.proposedRate,
+    }).from(applicationsTable).where(inArray(applicationsTable.projectId, projectIds));
+
+    totalApplicationsReceived = allApps.length;
+    totalSpent = allApps
+      .filter(a => a.status === "accepted")
+      .reduce((sum, a) => sum + a.proposedRate, 0);
   }
 
   const recentProjects = await db.select().from(projectsTable)
     .where(eq(projectsTable.clientId, req.user!.userId))
     .orderBy(sql`${projectsTable.createdAt} DESC`).limit(10);
 
-  const recentWithCounts = await Promise.all(recentProjects.map(async (p) => {
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, p.id));
-    return { ...p, clientName: null, applicationCount: Number(count) };
-  }));
+  // P1: Batch application counts
+  let recentWithCounts: object[] = [];
+  if (recentProjects.length > 0) {
+    const recentIds = recentProjects.map(p => p.id);
+    const appCounts = await db.select({
+      projectId: applicationsTable.projectId,
+      count: sql<number>`count(*)`,
+    }).from(applicationsTable).where(inArray(applicationsTable.projectId, recentIds)).groupBy(applicationsTable.projectId);
+
+    const countMap = new Map(appCounts.map(a => [a.projectId, Number(a.count)]));
+    recentWithCounts = recentProjects.map(p => ({ ...p, clientName: null, applicationCount: countMap.get(p.id) ?? 0 }));
+  }
 
   res.json({ totalProjectsPosted, openProjects, totalApplicationsReceived, totalSpent, recentProjects: recentWithCounts });
 });
@@ -78,9 +104,10 @@ router.get("/ai-recommendations", requireAuth, requireRole("freelancer"), async 
   const skillWeightMap = new Map(mySkills.map(s => [s.name.toLowerCase(), proficiencyWeight[s.proficiencyLevel] ?? 0.5]));
   const mySkillNames = new Set(mySkills.map(s => s.name.toLowerCase()));
 
+  // P3: Limit open project scope so AI scoring doesn't scan unbounded rows
   const openProjects = await db.select().from(projectsTable)
     .where(and(eq(projectsTable.status, "open"), sql`${projectsTable.clientId} != ${req.user!.userId}`))
-    .orderBy(sql`${projectsTable.createdAt} DESC`).limit(100);
+    .orderBy(sql`${projectsTable.createdAt} DESC`).limit(50);
 
   const scored = openProjects.map(project => {
     const required = (project.requiredSkills ?? []).map(s => s.toLowerCase());

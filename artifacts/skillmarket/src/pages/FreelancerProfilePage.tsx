@@ -12,7 +12,7 @@ import { formatCurrency, getAvailabilityColor, cn } from "../lib/utils";
 export default function FreelancerProfilePage() {
   const { id } = useParams<{ id: string }>();
   const fid = parseInt(id, 10);
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
 
   const [isSaved, setIsSaved] = useState(false);
@@ -22,28 +22,35 @@ export default function FreelancerProfilePage() {
   const { data: freelancer, isLoading } = useGetFreelancer(fid, { query: { enabled: !!fid, queryKey: ["freelancer", fid] } });
 
   useEffect(() => {
-    if (!token || !fid) return;
-    fetch(`/api/saved/check?itemType=freelancer&itemId=${fid}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    if (!user || !fid) return;
+    // S2: credentials: "include" sends the httpOnly auth cookie automatically
+    fetch(`/api/saved/check?itemType=freelancer&itemId=${fid}`, { credentials: "include" })
       .then(r => r.json())
       .then(d => {
         if (d.saved !== undefined) setIsSaved(d.saved);
         setSaveChecked(true);
       })
       .catch(() => setSaveChecked(true));
-  }, [fid, token]);
+  }, [fid, user]);
 
   const handleSaveProfile = async () => {
     if (!user) { navigate("/login"); return; }
     setSavingProfile(true);
     try {
-      const method = isSaved ? "DELETE" : "POST";
-      await fetch("/api/saved", {
-        method,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemType: "freelancer", itemId: fid }),
-      });
+      if (isSaved) {
+        // B6: DELETE uses query params, not request body
+        await fetch(`/api/saved?itemType=freelancer&itemId=${fid}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } else {
+        await fetch("/api/saved", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ itemType: "freelancer", itemId: fid }),
+        });
+      }
       setIsSaved(!isSaved);
     } catch {
       // silent

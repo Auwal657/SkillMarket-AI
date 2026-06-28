@@ -1,27 +1,45 @@
 import { Router } from "express";
-import { eq, ilike, or, sql, and } from "drizzle-orm";
+import { eq, ilike, or, sql, and, inArray } from "drizzle-orm";
 import { db, projectsTable, usersTable, applicationsTable } from "@workspace/db";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router = Router();
 
-function buildProject(project: Record<string, unknown>, clientName: string | null, applicationCount = 0) {
-  return { ...project, clientName, applicationCount };
+// P1: Batch-enrich a list of raw projects — 2 queries total regardless of list size
+async function enrichProjects(projects: typeof projectsTable.$inferSelect[]) {
+  if (projects.length === 0) return [];
+
+  const clientIds = [...new Set(projects.map(p => p.clientId))];
+  const projectIds = projects.map(p => p.id);
+
+  const [clients, appCounts] = await Promise.all([
+    db.select({ id: usersTable.id, name: usersTable.name })
+      .from(usersTable)
+      .where(inArray(usersTable.id, clientIds)),
+    db.select({ projectId: applicationsTable.projectId, count: sql<number>`count(*)` })
+      .from(applicationsTable)
+      .where(inArray(applicationsTable.projectId, projectIds))
+      .groupBy(applicationsTable.projectId),
+  ]);
+
+  const clientMap = new Map(clients.map(c => [c.id, c.name]));
+  const countMap = new Map(appCounts.map(a => [a.projectId, Number(a.count)]));
+
+  return projects.map(p => ({
+    ...p,
+    clientName: clientMap.get(p.clientId) ?? null,
+    applicationCount: countMap.get(p.id) ?? 0,
+  }));
 }
 
 // /my must come before /:id
 router.get("/my", requireAuth, requireRole("client"), async (req, res) => {
-  const projects = await db.select().from(projectsTable).where(eq(projectsTable.clientId, req.user!.userId))
+  const projects = await db.select().from(projectsTable)
+    .where(eq(projectsTable.clientId, req.user!.userId))
     .orderBy(sql`${projectsTable.createdAt} DESC`);
 
-  const result = await Promise.all(projects.map(async (p) => {
-    const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.clientId));
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, p.id));
-    return buildProject(p as Record<string, unknown>, client?.name ?? null, Number(count));
-  }));
-
-  res.json(result);
+  res.json(await enrichProjects(projects));
 });
 
 router.get("/", async (req, res) => {
@@ -43,14 +61,7 @@ router.get("/", async (req, res) => {
   }
 
   const projects = await query.orderBy(sql`${projectsTable.createdAt} DESC`).limit(limit).offset(offset);
-
-  const result = await Promise.all(projects.map(async (p) => {
-    const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.clientId));
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, p.id));
-    return buildProject(p as Record<string, unknown>, client?.name ?? null, Number(count));
-  }));
-
-  res.json(result);
+  res.json(await enrichProjects(projects));
 });
 
 router.post("/", requireAuth, requireRole("client"), async (req, res) => {
@@ -73,7 +84,7 @@ router.post("/", requireAuth, requireRole("client"), async (req, res) => {
   }).returning();
 
   const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.userId));
-  res.status(201).json(buildProject(project as Record<string, unknown>, client?.name ?? null, 0));
+  res.status(201).json({ ...project, clientName: client?.name ?? null, applicationCount: 0 });
 });
 
 router.get("/:id", async (req, res) => {
@@ -83,10 +94,12 @@ router.get("/:id", async (req, res) => {
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
   if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
-  const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, project.clientId));
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, id));
+  const [[client], [appCount]] = await Promise.all([
+    db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, project.clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, id)),
+  ]);
 
-  res.json(buildProject(project as Record<string, unknown>, client?.name ?? null, Number(count)));
+  res.json({ ...project, clientName: client?.name ?? null, applicationCount: Number(appCount?.count ?? 0) });
 });
 
 router.patch("/:id", requireAuth, requireRole("client"), async (req, res) => {
@@ -118,9 +131,11 @@ router.patch("/:id", requireAuth, requireRole("client"), async (req, res) => {
     ? await db.update(projectsTable).set(updates).where(eq(projectsTable.id, id)).returning()
     : [project];
 
-  const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.clientId));
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, id));
-  res.json(buildProject(updated as Record<string, unknown>, client?.name ?? null, Number(count)));
+  const [[client], [appCount]] = await Promise.all([
+    db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(applicationsTable).where(eq(applicationsTable.projectId, id)),
+  ]);
+  res.json({ ...updated, clientName: client?.name ?? null, applicationCount: Number(appCount?.count ?? 0) });
 });
 
 router.delete("/:id", requireAuth, requireRole("client"), async (req, res) => {
@@ -139,17 +154,33 @@ router.get("/:projectId/applications", requireAuth, requireRole("client"), async
   const projectId = parseInt(req.params.projectId, 10);
   if (isNaN(projectId)) { res.status(400).json({ error: "Invalid projectId" }); return; }
 
-  const [project] = await db.select({ clientId: projectsTable.clientId }).from(projectsTable).where(eq(projectsTable.id, projectId));
+  const [project] = await db.select({ clientId: projectsTable.clientId, title: projectsTable.title }).from(projectsTable).where(eq(projectsTable.id, projectId));
   if (!project) { res.status(404).json({ error: "Project not found" }); return; }
   if (project.clientId !== req.user!.userId) { res.status(403).json({ error: "Forbidden" }); return; }
 
-  const applications = await db.select().from(applicationsTable).where(eq(applicationsTable.projectId, projectId))
+  const applications = await db.select().from(applicationsTable)
+    .where(eq(applicationsTable.projectId, projectId))
     .orderBy(sql`${applicationsTable.createdAt} DESC`);
 
-  const result = await Promise.all(applications.map(async (app) => {
-    const [freelancer] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, app.freelancerId));
-    const [projectData] = await db.select({ title: projectsTable.title }).from(projectsTable).where(eq(projectsTable.id, app.projectId));
-    return { ...app, freelancerName: freelancer?.name ?? null, freelancerHeadline: null, projectTitle: projectData?.title ?? null };
+  if (applications.length === 0) { res.json([]); return; }
+
+  // P1: Batch lookup freelancer names and headlines
+  const freelancerIds = [...new Set(applications.map(a => a.freelancerId))];
+  const [freelancers, freelancerProfiles] = await Promise.all([
+    db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, freelancerIds)),
+    db.select({ userId: freelancerProfilesTable.userId, headline: freelancerProfilesTable.headline })
+      .from(freelancerProfilesTable).where(inArray(freelancerProfilesTable.userId, freelancerIds)),
+  ]);
+
+  const nameMap = new Map(freelancers.map(f => [f.id, f.name]));
+  const headlineMap = new Map(freelancerProfiles.map(f => [f.userId, f.headline]));
+
+  const result = applications.map(app => ({
+    ...app,
+    freelancerName: nameMap.get(app.freelancerId) ?? null,
+    // B7: Return actual headline instead of always null
+    freelancerHeadline: headlineMap.get(app.freelancerId) ?? null,
+    projectTitle: project.title,
   }));
 
   res.json(result);

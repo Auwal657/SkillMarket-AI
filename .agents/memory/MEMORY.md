@@ -1,0 +1,3 @@
+- [Cookie auth migration](cookie-auth.md) — auth moved from localStorage Bearer tokens to httpOnly cookies; token is always null in AuthContext; credentials:"include" everywhere.
+- [B6 DELETE saved](b6-delete-saved.md) — DELETE /api/saved uses query params (?itemType=X&itemId=Y), not request body; all frontend callers updated.
+- [B3 notification route order](b3-notif-route-order.md) — /read-all must be registered before /:id/read to avoid Express matching "read-all" as an :id param.

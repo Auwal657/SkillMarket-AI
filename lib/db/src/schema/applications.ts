@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, real, pgEnum, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, real, pgEnum, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { projectsTable } from "./projects";
@@ -17,6 +17,10 @@ export const applicationsTable = pgTable("applications", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   unique("unique_application").on(table.projectId, table.freelancerId),
+  // P2: Indexes for common query patterns
+  index("applications_freelancer_id_idx").on(table.freelancerId),
+  index("applications_project_id_idx").on(table.projectId),
+  index("applications_status_idx").on(table.status),
 ]);
 
 export const insertApplicationSchema = createInsertSchema(applicationsTable).omit({

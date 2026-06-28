@@ -5,24 +5,23 @@ import { useAuth } from "../../contexts/AuthContext";
 import Avatar from "../common/Avatar";
 import { cn } from "../../lib/utils";
 
-function useUnreadCounts(token: string | null, userId: number | undefined) {
+// S2: Poll using credentials: "include" (httpOnly cookie) instead of Authorization header
+function useUnreadCounts(userId: number | undefined) {
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
-    if (!token || !userId) {
+    if (!userId) {
       setUnreadNotifs(0);
       setUnreadMessages(0);
       return;
     }
 
-    const headers = { Authorization: `Bearer ${token}` };
-
     const fetchCounts = async () => {
       try {
         const [nRes, mRes] = await Promise.all([
-          fetch("/api/notifications", { headers }),
-          fetch("/api/messages/conversations", { headers }),
+          fetch("/api/notifications", { credentials: "include" }),
+          fetch("/api/messages/conversations", { credentials: "include" }),
         ]);
         if (nRes.ok) {
           const notifs = await nRes.json();
@@ -40,18 +39,18 @@ function useUnreadCounts(token: string | null, userId: number | undefined) {
     fetchCounts();
     const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
-  }, [token, userId]);
+  }, [userId]);
 
   return { unreadNotifs, unreadMessages };
 }
 
 export default function Navbar() {
-  const { user, token, logout } = useAuth();
+  const { user, logout } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const { unreadNotifs, unreadMessages } = useUnreadCounts(token, user?.id);
+  const { unreadNotifs, unreadMessages } = useUnreadCounts(user?.id);
 
   const isActive = (path: string) => location === path;
   const dashboardHref = user?.role === "client" ? "/dashboard/client" : "/dashboard";

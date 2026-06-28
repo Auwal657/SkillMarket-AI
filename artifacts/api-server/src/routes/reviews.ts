@@ -1,6 +1,9 @@
 import { Router } from "express";
-import { eq, sql } from "drizzle-orm";
-import { db, reviewsTable, freelancerProfilesTable, usersTable, notificationsTable } from "@workspace/db";
+import { eq, sql, inArray, and } from "drizzle-orm";
+import {
+  db, reviewsTable, freelancerProfilesTable, usersTable,
+  notificationsTable, applicationsTable, projectsTable,
+} from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 import { z } from "zod";
 
@@ -10,7 +13,8 @@ const CreateReviewBody = z.object({
   freelancerProfileId: z.number().int().positive(),
   projectId: z.number().int().positive().optional(),
   rating: z.number().min(1).max(5),
-  comment: z.string().optional(),
+  // S8: Cap comment length
+  comment: z.string().max(2000).optional(),
 });
 
 router.get("/freelancer/:id", async (req, res) => {
@@ -21,9 +25,18 @@ router.get("/freelancer/:id", async (req, res) => {
     .where(eq(reviewsTable.freelancerProfileId, id))
     .orderBy(sql`${reviewsTable.createdAt} DESC`);
 
-  const result = await Promise.all(reviews.map(async (r) => {
-    const [reviewer] = await db.select({ name: usersTable.name, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(eq(usersTable.id, r.reviewerId));
-    return { ...r, reviewerName: reviewer?.name ?? null, reviewerAvatar: reviewer?.avatarUrl ?? null };
+  if (reviews.length === 0) { res.json([]); return; }
+
+  // P1: Batch-fetch reviewer info
+  const reviewerIds = [...new Set(reviews.map(r => r.reviewerId))];
+  const reviewers = await db.select({ id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl })
+    .from(usersTable).where(inArray(usersTable.id, reviewerIds));
+  const reviewerMap = new Map(reviewers.map(r => [r.id, r]));
+
+  const result = reviews.map(r => ({
+    ...r,
+    reviewerName: reviewerMap.get(r.reviewerId)?.name ?? null,
+    reviewerAvatar: reviewerMap.get(r.reviewerId)?.avatarUrl ?? null,
   }));
 
   res.json(result);
@@ -37,6 +50,22 @@ router.post("/", requireAuth, requireRole("client"), async (req, res) => {
     .from(freelancerProfilesTable).where(eq(freelancerProfilesTable.id, parsed.data.freelancerProfileId));
   if (!fp) { res.status(404).json({ error: "Freelancer profile not found" }); return; }
 
+  // S7: Verify the reviewer has worked with this freelancer (accepted application on a client-owned project)
+  const eligibleWork = await db.select({ id: applicationsTable.id })
+    .from(applicationsTable)
+    .innerJoin(projectsTable, eq(applicationsTable.projectId, projectsTable.id))
+    .where(and(
+      eq(applicationsTable.freelancerId, fp.userId),
+      eq(applicationsTable.status, "accepted"),
+      eq(projectsTable.clientId, req.user!.userId)
+    ))
+    .limit(1);
+
+  if (eligibleWork.length === 0) {
+    res.status(403).json({ error: "You can only review freelancers you have worked with on a completed project" });
+    return;
+  }
+
   const [review] = await db.insert(reviewsTable).values({
     freelancerProfileId: parsed.data.freelancerProfileId,
     reviewerId: req.user!.userId,
@@ -47,14 +76,15 @@ router.post("/", requireAuth, requireRole("client"), async (req, res) => {
 
   if (!review) { res.status(409).json({ error: "You have already reviewed this freelancer for this project" }); return; }
 
-  // Update averageRating and totalReviews
-  const allReviews = await db.select({ rating: reviewsTable.rating }).from(reviewsTable)
-    .where(eq(reviewsTable.freelancerProfileId, parsed.data.freelancerProfileId));
-  const avg = allReviews.reduce((s, r) => s + r.rating, 0) / allReviews.length;
+  // P4: Use SQL AVG() instead of fetching all reviews and computing in JS
+  const [stats] = await db.select({
+    avg: sql<number>`AVG(${reviewsTable.rating})`,
+    count: sql<number>`COUNT(*)`,
+  }).from(reviewsTable).where(eq(reviewsTable.freelancerProfileId, parsed.data.freelancerProfileId));
 
   await db.update(freelancerProfilesTable).set({
-    averageRating: Math.round(avg * 10) / 10,
-    totalReviews: allReviews.length,
+    averageRating: Math.round(Number(stats.avg) * 10) / 10,
+    totalReviews: Number(stats.count),
   }).where(eq(freelancerProfilesTable.id, parsed.data.freelancerProfileId));
 
   // Notify freelancer

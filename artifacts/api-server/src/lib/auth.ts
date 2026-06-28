@@ -1,8 +1,16 @@
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "skillmarket-dev-secret-change-in-prod";
+// S1: Fail fast at startup — no hardcoded fallback secret
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET environment variable is required. Add it to your Replit secrets."
+  );
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = "7d";
+const COOKIE_NAME = "auth_token";
 
 export interface JwtPayload {
   userId: number;
@@ -18,6 +26,21 @@ export function verifyToken(token: string): JwtPayload {
   return jwt.verify(token, JWT_SECRET) as JwtPayload;
 }
 
+// S2: Set an httpOnly cookie — not readable by JavaScript, resistant to XSS
+export function setTokenCookie(res: Response, token: string): void {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    path: "/",
+  });
+}
+
+export function clearTokenCookie(res: Response): void {
+  res.clearCookie(COOKIE_NAME, { path: "/" });
+}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -27,13 +50,25 @@ declare global {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+// S2: Prefer the httpOnly cookie; fall back to Bearer for API clients
+function extractToken(req: Request): string | null {
+  const cookieToken = req.cookies?.[COOKIE_NAME];
+  if (cookieToken) return cookieToken;
+
   const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+  if (header?.startsWith("Bearer ")) {
+    return header.slice(7);
+  }
+
+  return null;
+}
+
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const token = extractToken(req);
+  if (!token) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  const token = header.slice(7);
   try {
     req.user = verifyToken(token);
     next();
@@ -54,4 +89,17 @@ export function requireRole(role: "freelancer" | "client") {
     }
     next();
   };
+}
+
+// Optional auth — attaches user if a valid token is present, never rejects
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const token = extractToken(req);
+  if (token) {
+    try {
+      req.user = verifyToken(token);
+    } catch {
+      // Invalid token treated as unauthenticated — no error
+    }
+  }
+  next();
 }

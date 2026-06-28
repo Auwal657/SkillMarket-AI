@@ -15,7 +15,7 @@ import { formatCurrency, formatDate, getStatusColor, cn } from "../lib/utils";
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const pid = parseInt(id, 10);
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -41,25 +41,32 @@ export default function ProjectDetailPage() {
   const alreadyApplied = user?.role === "freelancer" && (myApplications ?? []).some(a => a.projectId === pid);
 
   useEffect(() => {
-    if (!token || !pid) return;
-    fetch(`/api/saved/check?itemType=project&itemId=${pid}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    if (!user || !pid) return;
+    // S2: credentials: "include" sends the httpOnly auth cookie automatically
+    fetch(`/api/saved/check?itemType=project&itemId=${pid}`, { credentials: "include" })
       .then(r => r.json())
       .then(d => { if (d.saved !== undefined) setIsSaved(d.saved); })
       .catch(() => {});
-  }, [pid, token]);
+  }, [pid, user]);
 
   const handleSaveProject = async () => {
     if (!user) { navigate("/login"); return; }
     setSavingProject(true);
     try {
-      const method = isSaved ? "DELETE" : "POST";
-      await fetch("/api/saved", {
-        method,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemType: "project", itemId: pid }),
-      });
+      if (isSaved) {
+        // B6: DELETE uses query params, not body — more reliable across browsers/proxies
+        await fetch(`/api/saved?itemType=project&itemId=${pid}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } else {
+        await fetch("/api/saved", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ itemType: "project", itemId: pid }),
+        });
+      }
       setIsSaved(!isSaved);
     } catch {
       // silent

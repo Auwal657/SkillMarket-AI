@@ -13,7 +13,9 @@ interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
+  // S2: token is kept in the interface for backward compat but is always null.
+  // Auth is handled by an httpOnly cookie — not accessible to JavaScript.
+  token: null;
   isLoading: boolean;
   login: (token: string, user: AuthUser) => void;
   logout: () => void;
@@ -24,36 +26,38 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("sm_token");
+    // S2: Token is no longer stored in localStorage — it lives in an httpOnly cookie.
+    // We still persist the user object (non-sensitive display data) in localStorage
+    // so the UI can restore identity on refresh without an extra /api/auth/me round-trip.
     const storedUser = localStorage.getItem("sm_user");
-    if (storedToken && storedUser) {
+    if (storedUser) {
       try {
-        setToken(storedToken);
         setUser(JSON.parse(storedUser));
       } catch {
-        localStorage.removeItem("sm_token");
         localStorage.removeItem("sm_user");
       }
     }
     setIsLoading(false);
   }, []);
 
-  const login = useCallback((newToken: string, newUser: AuthUser) => {
-    localStorage.setItem("sm_token", newToken);
+  const login = useCallback((_token: string, newUser: AuthUser) => {
+    // S2: Cookie is set by the server response — we only persist display data here.
     localStorage.setItem("sm_user", JSON.stringify(newUser));
-    setToken(newToken);
     setUser(newUser);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("sm_token");
+  const logout = useCallback(async () => {
+    // S2: Call logout endpoint so the server clears the httpOnly cookie
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // Ignore network errors during logout
+    }
     localStorage.removeItem("sm_user");
-    setToken(null);
     setUser(null);
     queryClient.clear();
   }, [queryClient]);
@@ -64,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token: null, isLoading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

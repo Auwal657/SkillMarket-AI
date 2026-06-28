@@ -1,14 +1,15 @@
 import { Router } from "express";
-import { eq, or, and, sql } from "drizzle-orm";
+import { eq, or, and, sql, inArray } from "drizzle-orm";
 import { db, conversationsTable, messagesTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { z } from "zod";
 
 const router = Router();
 
+// S8: Enforce a reasonable content length
 const SendMessageBody = z.object({
   recipientId: z.number().int().positive(),
-  content: z.string().min(1).max(5000),
+  content: z.string().min(1).max(2000),
 });
 
 router.get("/conversations", requireAuth, async (req, res) => {
@@ -17,16 +18,48 @@ router.get("/conversations", requireAuth, async (req, res) => {
     .where(or(eq(conversationsTable.participant1Id, uid), eq(conversationsTable.participant2Id, uid)))
     .orderBy(sql`${conversationsTable.lastMessageAt} DESC`);
 
-  const result = await Promise.all(conversations.map(async (c) => {
-    const otherId = c.participant1Id === uid ? c.participant2Id : c.participant1Id;
-    const [other] = await db.select({ id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl, role: usersTable.role })
-      .from(usersTable).where(eq(usersTable.id, otherId));
-    const [lastMsg] = await db.select().from(messagesTable)
-      .where(eq(messagesTable.conversationId, c.id))
-      .orderBy(sql`${messagesTable.createdAt} DESC`).limit(1);
-    const [{ count: unread }] = await db.select({ count: sql<number>`count(*)` }).from(messagesTable)
-      .where(and(eq(messagesTable.conversationId, c.id), eq(messagesTable.isRead, false), sql`${messagesTable.senderId} != ${uid}`));
-    return { ...c, otherUser: other ?? null, lastMessage: lastMsg ?? null, unreadCount: Number(unread) };
+  if (conversations.length === 0) { res.json([]); return; }
+
+  // P1: Batch-fetch all other-participant user info in one query
+  const otherIds = conversations.map(c => c.participant1Id === uid ? c.participant2Id : c.participant1Id);
+  const uniqueOtherIds = [...new Set(otherIds)];
+  const conversationIds = conversations.map(c => c.id);
+
+  const [otherUsers, lastMessages, unreadCounts] = await Promise.all([
+    db.select({ id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl, role: usersTable.role })
+      .from(usersTable).where(inArray(usersTable.id, uniqueOtherIds)),
+
+    // Last message per conversation — use DISTINCT ON for efficiency
+    db.select().from(messagesTable)
+      .where(inArray(messagesTable.conversationId, conversationIds))
+      .orderBy(sql`${messagesTable.conversationId}, ${messagesTable.createdAt} DESC`),
+
+    db.select({
+      conversationId: messagesTable.conversationId,
+      count: sql<number>`count(*)`,
+    }).from(messagesTable)
+      .where(and(
+        inArray(messagesTable.conversationId, conversationIds),
+        eq(messagesTable.isRead, false),
+        sql`${messagesTable.senderId} != ${uid}`
+      ))
+      .groupBy(messagesTable.conversationId),
+  ]);
+
+  const userMap = new Map(otherUsers.map(u => [u.id, u]));
+  const unreadMap = new Map(unreadCounts.map(u => [u.conversationId, Number(u.count)]));
+
+  // Build last-message map: first message for each conversation (since ordered DESC, first = latest)
+  const lastMsgMap = new Map<number, typeof lastMessages[0]>();
+  for (const msg of lastMessages) {
+    if (!lastMsgMap.has(msg.conversationId)) lastMsgMap.set(msg.conversationId, msg);
+  }
+
+  const result = conversations.map((c, i) => ({
+    ...c,
+    otherUser: userMap.get(otherIds[i]) ?? null,
+    lastMessage: lastMsgMap.get(c.id) ?? null,
+    unreadCount: unreadMap.get(c.id) ?? 0,
   }));
 
   res.json(result);
@@ -37,17 +70,23 @@ router.get("/:conversationId", requireAuth, async (req, res) => {
   if (isNaN(conversationId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const uid = req.user!.userId;
 
+  // P6: Add pagination — oldest messages first, client can paginate backwards
+  const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+  const offset = parseInt(req.query.offset as string || "0", 10);
+
   const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conversationId));
   if (!conv) { res.status(404).json({ error: "Conversation not found" }); return; }
   if (conv.participant1Id !== uid && conv.participant2Id !== uid) { res.status(403).json({ error: "Forbidden" }); return; }
 
-  // Mark as read
+  // Mark incoming messages as read
   await db.update(messagesTable).set({ isRead: true })
     .where(and(eq(messagesTable.conversationId, conversationId), sql`${messagesTable.senderId} != ${uid}`));
 
   const messages = await db.select().from(messagesTable)
     .where(eq(messagesTable.conversationId, conversationId))
-    .orderBy(sql`${messagesTable.createdAt} ASC`);
+    .orderBy(sql`${messagesTable.createdAt} ASC`)
+    .limit(limit)
+    .offset(offset);
 
   res.json(messages);
 });

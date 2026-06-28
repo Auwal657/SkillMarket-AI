@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -9,7 +9,11 @@ export const conversationsTable = pgTable("conversations", {
   participant2Id: integer("participant2_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  // P2: Conversation lookup by participant
+  index("conversations_p1_idx").on(table.participant1Id),
+  index("conversations_p2_idx").on(table.participant2Id),
+]);
 
 export const messagesTable = pgTable("messages", {
   id: serial("id").primaryKey(),
