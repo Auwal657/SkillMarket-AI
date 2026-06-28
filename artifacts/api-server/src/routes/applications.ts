@@ -135,18 +135,6 @@ router.patch("/:id/status", requireAuth, requireRole("client"), async (req, res)
       await db.insert(notificationsTable).values(notifValues).catch(() => {});
     }
 
-    // B4: Only update earnings if the application was previously pending
-    if (app.status === "pending") {
-      const [fpRow] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable)
-        .where(eq(freelancerProfilesTable.userId, app.freelancerId));
-      if (fpRow) {
-        await db.update(freelancerProfilesTable).set({
-          totalEarnings: sql`${freelancerProfilesTable.totalEarnings} + ${app.proposedRate}`,
-          completedProjects: sql`${freelancerProfilesTable.completedProjects} + 1`,
-        }).where(eq(freelancerProfilesTable.id, fpRow.id));
-      }
-    }
-
     await db.insert(notificationsTable).values({
       userId: app.freelancerId,
       type: "application_accepted",

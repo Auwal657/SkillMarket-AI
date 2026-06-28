@@ -50,9 +50,19 @@ export function initSocket(httpServer: HttpServer) {
     // User joins their personal room for targeted notifications
     socket.join(`user:${userId}`);
 
-    // Join a conversation room
-    socket.on("join:conversation", (conversationId: number) => {
-      socket.join(`conv:${conversationId}`);
+    // Join a conversation room — verify the user is a participant first
+    socket.on("join:conversation", async (conversationId: number) => {
+      try {
+        const [conv] = await db
+          .select({ p1: conversationsTable.participant1Id, p2: conversationsTable.participant2Id })
+          .from(conversationsTable)
+          .where(eq(conversationsTable.id, conversationId));
+        if (!conv) return;
+        if (conv.p1 !== userId && conv.p2 !== userId) return; // not a participant
+        socket.join(`conv:${conversationId}`);
+      } catch (err) {
+        logger.error(err, "join:conversation error");
+      }
     });
 
     // Leave a conversation room

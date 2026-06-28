@@ -25,3 +25,6 @@ description: How Socket.IO is wired into the Express backend and React frontend,
 - Route: `/admin` added to `App.tsx` wrapped in `<ProtectedRoute>`.
 
 **Why:** Admin status stored in DB (not JWT) so it can be toggled without re-login.
+
+## Backend tsconfig note
+The backend `tsc --noEmit` shows a pre-existing TS5098 warning (`customConditions` incompatible with `moduleResolution: node`). This is harmless — `tsx` handles workspace package resolution correctly at runtime. Do NOT change the backend tsconfig to `node16` — it causes ESM/CJS conflicts with workspace packages. The runtime is the source of truth.

@@ -25,6 +25,7 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState("");
   const [isSaved, setIsSaved] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [updatingAppId, setUpdatingAppId] = useState<number | null>(null);
   const [completing, setCompleting] = useState(false);
 
@@ -65,7 +66,8 @@ export default function ProjectDetailPage() {
       }
       setIsSaved(!isSaved);
     } catch {
-      // silent
+      setSaveError("Failed to save project. Please try again.");
+      setTimeout(() => setSaveError(""), 3000);
     } finally {
       setSavingProject(false);
     }
@@ -333,19 +335,22 @@ export default function ProjectDetailPage() {
           )}
 
           {user && !isOwner && (
-            <button
-              onClick={handleSaveProject}
-              disabled={savingProject}
-              className={cn(
-                "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors",
-                isSaved
-                  ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
-              )}
-            >
-              <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
-              {savingProject ? "Saving..." : isSaved ? "Saved" : "Save Project"}
-            </button>
+            <>
+              <button
+                onClick={handleSaveProject}
+                disabled={savingProject}
+                className={cn(
+                  "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors",
+                  isSaved
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                )}
+              >
+                <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
+                {savingProject ? "Saving..." : isSaved ? "Saved" : "Save Project"}
+              </button>
+              {saveError && <p className="text-xs text-red-500 text-center">{saveError}</p>}
+            </>
           )}
 
           {isOwner && project.status === "open" && (

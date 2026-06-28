@@ -167,7 +167,10 @@ router.patch("/:id/complete", requireAuth, requireRole("client"), async (req, re
 
     if (fp) {
       await db.update(freelancerProfilesTable)
-        .set({ completedProjects: sql`${freelancerProfilesTable.completedProjects} + 1` })
+        .set({
+          completedProjects: sql`${freelancerProfilesTable.completedProjects} + 1`,
+          totalEarnings: sql`${freelancerProfilesTable.totalEarnings} + ${acceptedApp.proposedRate}`,
+        })
         .where(eq(freelancerProfilesTable.id, fp.id));
     }
 
