@@ -30,9 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // S2: Token is no longer stored in localStorage — it lives in an httpOnly cookie.
-    // We still persist the user object (non-sensitive display data) in localStorage
-    // so the UI can restore identity on refresh without an extra /api/auth/me round-trip.
+    // Restore display data from localStorage immediately for a fast initial render,
+    // then verify the session cookie is still valid with the server.
     const storedUser = localStorage.getItem("sm_user");
     if (storedUser) {
       try {
@@ -41,7 +40,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("sm_user");
       }
     }
-    setIsLoading(false);
+
+    // Verify the httpOnly session cookie is still valid
+    fetch("/api/auth/me", { credentials: "include" })
+      .then(async (res) => {
+        if (res.ok) {
+          const freshUser: AuthUser = await res.json();
+          localStorage.setItem("sm_user", JSON.stringify(freshUser));
+          setUser(freshUser);
+        } else {
+          // Cookie expired or invalid — clear stale local state
+          localStorage.removeItem("sm_user");
+          setUser(null);
+        }
+      })
+      .catch(() => {
+        // Network error — keep local state so offline UX is graceful
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const login = useCallback((_token: string, newUser: AuthUser) => {

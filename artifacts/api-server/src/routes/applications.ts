@@ -64,7 +64,7 @@ router.post("/", requireAuth, requireRole("freelancer"), async (req, res) => {
     type: "new_application",
     title: "New application received",
     message: `Someone applied to your project "${project.title}"`,
-    link: `/dashboard/projects/${project.id}/applications`,
+    link: `/projects/${project.id}`,
   }).catch(() => {});
 
   res.status(201).json({ ...app, projectTitle: project.title, freelancerName: null, freelancerHeadline: null });
