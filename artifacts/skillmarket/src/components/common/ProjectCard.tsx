@@ -22,55 +22,68 @@ interface ProjectCardProps {
 
 export default function ProjectCard({ id, title, description, category, budgetMin, budgetMax, timelineWeeks, status, clientName, requiredSkills = [], applicationCount, createdAt, onSave, isSaved }: ProjectCardProps) {
   return (
-    <div className="card p-6 flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="badge bg-indigo-100 text-indigo-700">{category}</span>
-            <span className={cn("badge", getStatusColor(status))}>{status.replace("_", " ")}</span>
+    <div className="card p-5 sm:p-6 flex flex-col h-full group relative overflow-hidden">
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{category}</span>
+            <span className="w-1 h-1 rounded-full bg-gray-300" />
+            <span className={cn("text-xs font-medium capitalize", 
+              status === 'open' ? 'text-green-600' : 'text-gray-500'
+            )}>{status.replace("_", " ")}</span>
           </div>
-          <Link href={`/projects/${id}`} className="font-semibold text-gray-900 hover:text-indigo-600 transition-colors line-clamp-2 block text-lg leading-snug">
+          <Link href={`/projects/${id}`} className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-2 block text-lg">
             {title}
           </Link>
-          {clientName && <p className="text-xs text-gray-400 mt-1">by {clientName}</p>}
+          {clientName && <p className="text-sm text-gray-500">by <span className="font-medium text-gray-700">{clientName}</span></p>}
         </div>
         {onSave && (
-          <button onClick={onSave} className={cn("p-1.5 rounded-lg transition-colors flex-shrink-0", isSaved ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100")}>
-            <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
+          <button 
+            onClick={(e) => { e.preventDefault(); onSave(); }} 
+            className={cn("p-2 rounded-md transition-colors flex-shrink-0 -mt-1 -mr-1", 
+              isSaved ? "text-indigo-600 bg-indigo-50 hover:bg-indigo-100" : "text-gray-400 hover:text-gray-900 hover:bg-gray-100"
+            )}
+          >
+            <Bookmark size={18} className={isSaved ? "fill-current" : ""} />
           </button>
         )}
       </div>
 
-      <p className="text-sm text-gray-600 line-clamp-3">{description}</p>
+      <p className="text-sm text-gray-600 line-clamp-2 flex-grow mb-5 leading-relaxed">{description}</p>
 
       {requiredSkills.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {requiredSkills.slice(0, 5).map(s => <SkillBadge key={s} name={s} variant="purple" />)}
-          {requiredSkills.length > 5 && <span className="badge bg-gray-100 text-gray-500">+{requiredSkills.length - 5}</span>}
+        <div className="flex flex-wrap gap-2 mb-5">
+          {requiredSkills.slice(0, 4).map(s => <SkillBadge key={s} name={s} variant="outline" />)}
+          {requiredSkills.length > 4 && <span className="text-xs text-gray-500 font-medium self-center">+{requiredSkills.length - 4}</span>}
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-        <div className="flex items-center gap-4 text-sm text-gray-500">
-          <div className="flex items-center gap-1">
-            <DollarSign size={14} />
-            <span>{formatCurrency(budgetMin)} – {formatCurrency(budgetMax)}</span>
-          </div>
-          {timelineWeeks && (
-            <div className="flex items-center gap-1">
-              <Clock size={14} />
-              <span>{timelineWeeks}w</span>
-            </div>
-          )}
-          {applicationCount !== undefined && (
-            <div className="flex items-center gap-1">
-              <Users size={14} />
-              <span>{applicationCount}</span>
-            </div>
-          )}
+      <div className="grid grid-cols-2 gap-y-3 gap-x-4 pt-4 border-t border-gray-100 mt-auto">
+        <div className="flex items-center gap-2 text-sm text-gray-700 font-medium">
+          <DollarSign size={16} className="text-gray-400" />
+          <span>{formatCurrency(budgetMin)} – {formatCurrency(budgetMax)}</span>
         </div>
-        <span className="text-xs text-gray-400">{formatRelativeTime(createdAt)}</span>
+        
+        {timelineWeeks && (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Clock size={16} className="text-gray-400" />
+            <span>{timelineWeeks} weeks</span>
+          </div>
+        )}
+        
+        {applicationCount !== undefined && (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Users size={16} className="text-gray-400" />
+            <span>{applicationCount} proposals</span>
+          </div>
+        )}
+        
+        <div className="text-sm text-gray-500 text-right col-start-2">
+          {formatRelativeTime(createdAt)}
+        </div>
       </div>
+      
+      <Link href={`/projects/${id}`} className="absolute inset-0 z-0"><span className="sr-only">View project</span></Link>
     </div>
   );
 }

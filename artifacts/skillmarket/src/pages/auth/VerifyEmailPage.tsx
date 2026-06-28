@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearch, useLocation } from "wouter";
-import { CheckCircle, XCircle, Loader2, Mail, RefreshCw } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Mail, RefreshCw, ArrowLeft } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
 type Status = "verifying" | "success" | "expired" | "invalid" | "already_verified";
@@ -63,93 +63,99 @@ export default function VerifyEmailPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 bg-gray-50">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
-
+      <div className="w-full max-w-md animate-in">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center relative overflow-hidden">
+          
           {status === "verifying" && (
-            <>
-              <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Loader2 className="text-indigo-500 animate-spin" size={32} />
+            <div className="animate-in">
+              <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Loader2 className="text-indigo-600 animate-spin" size={32} />
               </div>
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Verifying your email…</h1>
-              <p className="text-gray-500 text-sm">Just a moment while we confirm your address.</p>
-            </>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">Verifying your email</h1>
+              <p className="text-gray-500 text-sm">Just a moment while we securely confirm your address.</p>
+            </div>
           )}
 
           {status === "success" && (
-            <>
-              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-5">
-                <CheckCircle className="text-green-500" size={36} />
+            <div className="animate-in">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-green-500" />
+              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle className="text-green-600" size={32} />
               </div>
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Email verified!</h1>
-              {email && <p className="text-gray-500 text-sm mb-1">{email}</p>}
-              <p className="text-gray-500 text-sm mb-7">Your email address has been confirmed. You now have full access to SkillMarket AI.</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">Email verified!</h1>
+              {email && <p className="font-medium text-gray-900 bg-gray-50 py-1.5 px-4 rounded-lg inline-block mb-6">{email}</p>}
+              <p className="text-gray-500 text-sm mb-8">Your email address has been confirmed. You now have full access to SkillMarket AI.</p>
               <button
                 onClick={() => navigate(user?.role === "client" ? "/dashboard/client" : "/dashboard")}
-                className="btn-primary justify-center w-full py-3"
+                className="btn-primary w-full py-3 shadow-sm"
               >
                 Go to Dashboard
               </button>
-            </>
+            </div>
           )}
 
           {status === "expired" && (
-            <>
-              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-5">
-                <XCircle className="text-amber-500" size={36} />
+            <div className="animate-in">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500" />
+              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <XCircle className="text-amber-600" size={32} />
               </div>
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Link expired</h1>
-              <p className="text-gray-500 text-sm mb-6">This verification link has expired (links are valid for 24 hours). Request a new one below.</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">Link expired</h1>
+              <p className="text-gray-500 text-sm mb-8">This verification link has expired (links are valid for 24 hours). Request a new one to continue.</p>
+              
               {user ? (
-                <>
+                <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
                   <button
                     onClick={handleResend}
                     disabled={resending}
-                    className="btn-primary justify-center w-full py-3 mb-3"
+                    className="btn-primary w-full py-3 shadow-sm"
                   >
                     {resending ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                     {resending ? "Sending…" : "Resend Verification Email"}
                   </button>
-                  {resendMessage && <p className="text-green-600 text-sm mt-2">{resendMessage}</p>}
-                  {resendError && <p className="text-red-600 text-sm mt-2">{resendError}</p>}
-                </>
+                  {resendMessage && <p className="text-green-700 text-sm font-medium mt-3 bg-green-50 py-2 px-3 rounded-md">{resendMessage}</p>}
+                  {resendError && <p className="text-red-700 text-sm font-medium mt-3 bg-red-50 py-2 px-3 rounded-md">{resendError}</p>}
+                </div>
               ) : (
-                <button onClick={() => navigate("/login")} className="btn-primary justify-center w-full py-3">
+                <button onClick={() => navigate("/login")} className="btn-primary w-full py-3 shadow-sm">
                   Sign in to resend
                 </button>
               )}
-            </>
+            </div>
           )}
 
           {status === "invalid" && (
-            <>
-              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-5">
-                <XCircle className="text-red-500" size={36} />
+            <div className="animate-in">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-red-500" />
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <XCircle className="text-red-600" size={32} />
               </div>
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Invalid link</h1>
-              <p className="text-gray-500 text-sm mb-6">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">Invalid link</h1>
+              <p className="text-gray-500 text-sm mb-8 leading-relaxed">
                 {token
                   ? "This verification link is invalid or has already been used."
-                  : "No verification token provided. Please use the link from your email."}
+                  : "No verification token provided. Please use the exact link from your email."}
               </p>
+              
               {user && !user.emailVerified && (
-                <>
+                <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 mb-6">
                   <button
                     onClick={handleResend}
                     disabled={resending}
-                    className="btn-primary justify-center w-full py-3 mb-3"
+                    className="btn-primary w-full py-3 shadow-sm"
                   >
                     {resending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
                     {resending ? "Sending…" : "Resend Verification Email"}
                   </button>
-                  {resendMessage && <p className="text-green-600 text-sm mt-2">{resendMessage}</p>}
-                  {resendError && <p className="text-red-600 text-sm mt-2">{resendError}</p>}
-                </>
+                  {resendMessage && <p className="text-green-700 text-sm font-medium mt-3 bg-green-50 py-2 px-3 rounded-md">{resendMessage}</p>}
+                  {resendError && <p className="text-red-700 text-sm font-medium mt-3 bg-red-50 py-2 px-3 rounded-md">{resendError}</p>}
+                </div>
               )}
-              <button onClick={() => navigate("/")} className="text-indigo-600 text-sm font-medium hover:underline mt-2 block">
-                Back to home
+              
+              <button onClick={() => navigate("/")} className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
+                <ArrowLeft size={16} /> Back to home
               </button>
-            </>
+            </div>
           )}
 
         </div>

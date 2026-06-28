@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck, MapPin, Award } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
@@ -77,7 +77,6 @@ export default function FreelancerProfilePage() {
       .catch(() => setSaveChecked(true));
   }, [fid, user]);
 
-  // Fetch online presence for this freelancer's user
   useEffect(() => {
     if (!freelancer?.userId) return;
     fetch(`/api/presence?ids=${freelancer.userId}`)
@@ -102,6 +101,7 @@ export default function FreelancerProfilePage() {
       }
       setIsSaved(!isSaved);
     } catch {
+      // Handle error implicitly
     } finally {
       setSavingProfile(false);
     }
@@ -145,8 +145,8 @@ export default function FreelancerProfilePage() {
     }
   };
 
-  if (isLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
-  if (!freelancer) return <div className="text-center py-20 text-gray-500">Freelancer not found</div>;
+  if (isLoading) return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="xl" /></div>;
+  if (!freelancer) return <div className="flex flex-col items-center justify-center min-h-[60vh] text-center"><h2 className="text-2xl font-bold text-gray-900 mb-2">Profile not found</h2><p className="text-gray-500 mb-6">This freelancer profile may have been removed.</p><Link href="/freelancers" className="btn-primary">Browse Talent</Link></div>;
 
   const name = freelancer.user?.name ?? "Freelancer";
   const skillsByCategory = (freelancer.skills ?? []).reduce((acc, s) => {
@@ -157,9 +157,9 @@ export default function FreelancerProfilePage() {
   }, {} as Record<string, typeof freelancer.skills>);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <Link href="/freelancers" className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-6 transition-colors">
-        <ArrowLeft size={16} /> Back to Freelancers
+    <div className="page-container animate-in">
+      <Link href="/freelancers" className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 mb-8 transition-colors shadow-sm">
+        <ArrowLeft size={16} /> Back to Talent
       </Link>
 
       {showReport && user && (
@@ -179,191 +179,215 @@ export default function FreelancerProfilePage() {
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Sidebar */}
-        <div className="space-y-4">
-          <div className="card p-6 text-center">
-            <div className="relative inline-block mb-4">
-              <Avatar name={name} avatarUrl={freelancer.user?.avatarUrl} size="xl" />
-              <span className={cn(
-                "absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-white",
-                isOnline ? "bg-green-500" : "bg-gray-300"
-              )} />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">{name}</h1>
-            {freelancer.user?.emailVerified && (
-              <div className="flex items-center justify-center gap-1 mt-1 mb-0.5">
-                <BadgeCheck size={15} className="text-indigo-500" />
-                <span className="text-xs text-indigo-600 font-medium">Verified</span>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Sidebar - 4 cols */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden relative">
+            <div className="h-24 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+            <div className="px-8 pb-8 -mt-12 text-center">
+              <div className="relative inline-block mb-4">
+                <div className="p-1.5 bg-white rounded-full">
+                  <Avatar name={name} avatarUrl={freelancer.user?.avatarUrl} size="2xl" />
+                </div>
+                <span className={cn(
+                  "absolute bottom-2 right-2 w-4 h-4 rounded-full border-2 border-white shadow-sm",
+                  isOnline ? "bg-green-500" : "bg-gray-300"
+                )} />
               </div>
-            )}
-            <p className="text-gray-500 text-sm mt-1">{freelancer.headline}</p>
-            {freelancer.user?.university && (
-              <p className="text-xs text-gray-400 mt-1">{freelancer.user.university}</p>
-            )}
-            <div className="flex items-center justify-center gap-1.5 text-xs mt-1">
-              <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-green-500" : "bg-gray-300")} />
-              <span className={isOnline ? "text-green-600" : "text-gray-400"}>{isOnline ? "Online now" : "Offline"}</span>
-            </div>
-            {freelancer.availabilityStatus && (
-              <span className={cn("badge mt-3 inline-block", getAvailabilityColor(freelancer.availabilityStatus))}>
-                {freelancer.availabilityStatus}
-              </span>
-            )}
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <h1 className="text-2xl font-extrabold text-gray-900">{name}</h1>
+                {freelancer.user?.emailVerified && (
+                  <BadgeCheck size={20} className="text-indigo-500" />
+                )}
+              </div>
+              <p className="text-gray-600 font-medium mb-3">{freelancer.headline}</p>
+              
+              {freelancer.user?.university && (
+                <div className="flex items-center justify-center gap-1.5 text-sm text-gray-500 mb-4 bg-gray-50 py-1.5 px-3 rounded-full inline-flex mx-auto">
+                  <MapPin size={14} className="text-gray-400" />
+                  {freelancer.user.university}
+                </div>
+              )}
 
-            <div className="grid grid-cols-3 gap-3 mt-5 pt-5 border-t border-gray-100">
-              <div className="text-center">
-                <p className="font-bold text-gray-900">{formatCurrency(freelancer.hourlyRate)}</p>
-                <p className="text-xs text-gray-400">per hour</p>
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-gray-900">{freelancer.completedProjects ?? 0}</p>
-                <p className="text-xs text-gray-400">projects</p>
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-gray-900">{freelancer.profileViews ?? 0}</p>
-                <p className="text-xs text-gray-400">views</p>
-              </div>
-            </div>
+              {freelancer.availabilityStatus && (
+                <div className="mb-6">
+                  <span className={cn("px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-md", getAvailabilityColor(freelancer.availabilityStatus))}>
+                    {freelancer.availabilityStatus.replace("-", " ")}
+                  </span>
+                </div>
+              )}
 
-            {freelancer.averageRating && (
-              <div className="flex items-center justify-center gap-2 mt-4">
-                <StarRating rating={freelancer.averageRating} size={14} />
-                <span className="text-sm font-medium text-gray-900">{freelancer.averageRating.toFixed(1)}</span>
-                <span className="text-sm text-gray-400">({freelancer.totalReviews ?? 0})</span>
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <p className="text-xl font-extrabold text-gray-900">{formatCurrency(freelancer.hourlyRate)}</p>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">Hourly Rate</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <p className="text-xl font-extrabold text-gray-900">{freelancer.completedProjects ?? 0}</p>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">Jobs Done</p>
+                </div>
               </div>
-            )}
 
-            <div className="mt-5 space-y-2">
-              {user?.role === "client" && (
-                <>
-                  <button onClick={handleContact} className="btn-primary w-full justify-center">
-                    <MessageCircle size={16} /> Contact
-                  </button>
+              {freelancer.averageRating && (
+                <div className="flex items-center justify-center gap-2 mb-8">
+                  <div className="flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
+                    <StarRating rating={freelancer.averageRating} size={16} />
+                    <span className="text-base font-bold text-amber-900 ml-1">{freelancer.averageRating.toFixed(1)}</span>
+                  </div>
+                  <span className="text-sm font-medium text-gray-500">({freelancer.totalReviews ?? 0} reviews)</span>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {user?.role === "client" && (
+                  <>
+                    <button onClick={handleContact} className="btn-primary w-full justify-center py-3.5 text-base">
+                      <MessageCircle size={18} /> Message
+                    </button>
+                    <button
+                      onClick={() => setShowInvite(true)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border-2 border-indigo-600 text-indigo-700 font-bold hover:bg-indigo-50 transition-colors"
+                    >
+                      <Send size={18} /> Invite to Project
+                    </button>
+                  </>
+                )}
+                {user && (
                   <button
-                    onClick={() => setShowInvite(true)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors"
+                    onClick={handleSaveProfile}
+                    disabled={savingProfile || !saveChecked}
+                    className={cn(
+                      "w-full justify-center flex items-center gap-2 px-4 py-3.5 rounded-xl border-2 text-sm font-bold transition-colors disabled:opacity-60",
+                      isSaved
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    )}
                   >
-                    <Send size={15} /> Invite to Project
+                    <Bookmark size={18} className={isSaved ? "fill-current" : ""} />
+                    {savingProfile ? "Saving..." : isSaved ? "Saved to Profile" : "Save Profile"}
                   </button>
-                </>
-              )}
-              {user && (
-                <button
-                  onClick={handleSaveProfile}
-                  disabled={savingProfile || !saveChecked}
-                  className={cn(
-                    "w-full justify-center flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors disabled:opacity-60",
-                    isSaved
-                      ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  )}
-                >
-                  <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
-                  {savingProfile ? "Saving..." : isSaved ? "Saved" : "Save Profile"}
-                </button>
-              )}
-              {!user && (
-                <Link href="/login" className="btn-secondary w-full justify-center text-sm">Sign In to Contact</Link>
-              )}
-              {user && user.id !== (freelancer.userId ?? fid) && (
-                <button onClick={() => setShowReport(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-colors">
-                  <Flag size={13} /> Report
-                </button>
-              )}
+                )}
+                {!user && (
+                  <Link href="/login" className="btn-primary w-full justify-center py-3.5 text-base">Sign In to Contact</Link>
+                )}
+                {user && user.id !== (freelancer.userId ?? fid) && (
+                  <button onClick={() => setShowReport(true)} className="w-full flex items-center justify-center gap-2 py-2 mt-4 text-sm font-medium text-gray-400 hover:text-red-600 transition-colors">
+                    <Flag size={14} /> Report this profile
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Leave a Review card (client only, eligible) */}
           {user?.role === "client" && canReviewData && (
-            <div className="card p-5">
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Leave a Review</h3>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Star size={18} className="text-amber-500" /> Leave a Review
+              </h3>
               {reviewSubmitted || canReviewData.alreadyReviewed ? (
-                <p className="text-sm text-green-700 bg-green-50 rounded-xl px-3 py-2">
-                  {reviewSubmitted ? "Review submitted — thank you!" : "You've already reviewed this freelancer."}
-                </p>
+                <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-xl border border-green-100">
+                  <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                  <p className="text-sm font-medium">{reviewSubmitted ? "Review submitted — thank you!" : "You've already reviewed this freelancer."}</p>
+                </div>
               ) : canReviewData.canReview ? (
-                <form onSubmit={handleSubmitReview} className="space-y-3">
-                  {reviewError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{reviewError}</p>}
+                <form onSubmit={handleSubmitReview} className="space-y-4">
+                  {reviewError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 border border-red-100">{reviewError}</p>}
                   <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">Rating</label>
-                    <div className="flex gap-1">
+                    <label className="text-sm font-bold text-gray-900 block mb-2">Rating</label>
+                    <div className="flex gap-2">
                       {[1, 2, 3, 4, 5].map(v => (
                         <button
                           key={v}
                           type="button"
                           onClick={() => setReviewForm(f => ({ ...f, rating: v }))}
-                          className="focus:outline-none"
+                          className="focus:outline-none hover:scale-110 transition-transform"
                         >
                           <Star
-                            size={20}
-                            className={v <= reviewForm.rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}
+                            size={28}
+                            className={v <= reviewForm.rating ? "fill-amber-400 text-amber-400" : "text-gray-200"}
                           />
                         </button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">Comment (optional)</label>
+                    <label className="text-sm font-bold text-gray-900 block mb-2">Comment</label>
                     <textarea
                       value={reviewForm.comment}
                       onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
-                      className="input text-sm min-h-20"
-                      placeholder="Describe your experience working with this freelancer..."
+                      className="input min-h-[100px] p-3 text-sm"
+                      placeholder="Share your experience..."
                       maxLength={2000}
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={submittingReview}
-                    className="btn-primary w-full justify-center text-sm py-2"
+                    className="btn-primary w-full justify-center py-3 text-sm"
                   >
                     {submittingReview ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : "Submit Review"}
                   </button>
                 </form>
               ) : (
-                <p className="text-xs text-gray-500">{canReviewData.reason ?? "You are not eligible to review this freelancer."}</p>
+                <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-xl border border-gray-100">{canReviewData.reason ?? "You are not eligible to review this freelancer."}</p>
               )}
             </div>
           )}
         </div>
 
-        {/* Main */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Right Content - 8 cols */}
+        <div className="lg:col-span-8 space-y-8">
           {freelancer.bio && (
-            <div className="card p-6">
-              <h2 className="font-semibold text-gray-900 mb-3">About</h2>
-              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{freelancer.bio}</p>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">About Me</h2>
+              <div className="prose prose-indigo max-w-none prose-p:leading-relaxed prose-p:text-gray-600">
+                <p className="whitespace-pre-wrap">{freelancer.bio}</p>
+              </div>
             </div>
           )}
 
-          {Object.entries(skillsByCategory).map(([category, catSkills]) => (
-            <div key={category} className="card p-6">
-              <h2 className="font-semibold text-gray-900 mb-3">{category}</h2>
-              <div className="flex flex-wrap gap-2">
-                {catSkills?.map(s => <SkillBadge key={s.skillName} name={s.skillName} proficiency={s.proficiencyLevel} />)}
-              </div>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">Skills & Expertise</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {Object.entries(skillsByCategory).map(([category, catSkills]) => (
+                <div key={category}>
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 pb-2 border-b border-gray-100">{category}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {catSkills?.map(s => <SkillBadge key={s.skillName} name={s.skillName} proficiency={s.proficiencyLevel} variant="purple" />)}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
 
           {freelancer.portfolio && freelancer.portfolio.length > 0 && (
-            <div className="card p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">Portfolio</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Portfolio</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {freelancer.portfolio.map(item => (
-                  <div key={item.id} className="border border-gray-100 rounded-xl overflow-hidden hover:border-indigo-200 transition-colors">
-                    {item.imageUrl && <img src={item.imageUrl} alt={item.title} className="w-full h-36 object-cover" />}
-                    <div className="p-4">
-                      <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                      <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>
+                  <div key={item.id} className="group border border-gray-200 rounded-xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all duration-300 flex flex-col h-full bg-white">
+                    {item.imageUrl ? (
+                      <div className="aspect-[4/3] overflow-hidden relative">
+                        <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
+                      </div>
+                    ) : (
+                      <div className="aspect-[4/3] bg-gray-50 flex items-center justify-center border-b border-gray-100">
+                        <Award size={48} className="text-gray-300" />
+                      </div>
+                    )}
+                    <div className="p-5 flex-1 flex flex-col">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{item.title}</h3>
+                      <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-1">{item.description}</p>
                       {item.tags && item.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {item.tags.map(t => <span key={t} className="badge bg-gray-100 text-gray-500">{t}</span>)}
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                          {item.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-md">{t}</span>)}
+                          {item.tags.length > 3 && <span className="text-xs text-gray-400 font-medium">+{item.tags.length - 3}</span>}
                         </div>
                       )}
                       {item.projectUrl && (
-                        <a href={item.projectUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
-                          <ExternalLink size={12} /> View Project
+                        <a href={item.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-600 hover:text-indigo-800 mt-auto">
+                          <ExternalLink size={16} /> View Live Project
                         </a>
                       )}
                     </div>
@@ -373,29 +397,46 @@ export default function FreelancerProfilePage() {
             </div>
           )}
 
-          {/* Reviews */}
-          <div className="card p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">
-              Reviews {reviews.length > 0 && <span className="text-gray-400 font-normal text-sm">({reviews.length})</span>}
-            </h2>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-bold text-gray-900">Client Reviews</h2>
+              {reviews.length > 0 && (
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  <Star className="fill-amber-400 text-amber-400" size={16} />
+                  <span className="font-bold text-gray-900">{freelancer.averageRating?.toFixed(1) ?? "0.0"}</span>
+                  <span className="text-sm font-medium text-gray-500">({reviews.length})</span>
+                </div>
+              )}
+            </div>
+            
             {reviews.length === 0 ? (
-              <p className="text-sm text-gray-400">No reviews yet.</p>
+              <div className="bg-gray-50 rounded-xl p-10 text-center border border-gray-100 border-dashed">
+                <Star size={40} className="mx-auto text-gray-300 mb-3" />
+                <h3 className="text-lg font-bold text-gray-900 mb-1">No reviews yet</h3>
+                <p className="text-gray-500">This freelancer hasn't received any reviews.</p>
+              </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {reviews.map(r => (
-                  <div key={r.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Avatar name={r.reviewerName ?? "?"} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{r.reviewerName ?? "Anonymous"}</p>
-                        <p className="text-xs text-gray-400">{formatDate(r.createdAt)}</p>
+                  <div key={r.id} className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:border-indigo-100 transition-colors">
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={r.reviewerName ?? "?"} size="md" />
+                        <div>
+                          <p className="font-bold text-gray-900">{r.reviewerName ?? "Anonymous Client"}</p>
+                          <p className="text-xs font-medium text-gray-500">{formatDate(r.createdAt)}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <StarRating rating={r.rating} size={13} />
-                        <span className="text-sm font-semibold text-gray-900 ml-1">{r.rating}</span>
+                      <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
+                        <StarRating rating={r.rating} size={14} />
+                        <span className="text-sm font-bold text-amber-900 ml-1">{r.rating}.0</span>
                       </div>
                     </div>
-                    {r.comment && <p className="text-sm text-gray-600 leading-relaxed ml-10">{r.comment}</p>}
+                    {r.comment && (
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <p className="text-sm text-gray-700 leading-relaxed italic">"{r.comment}"</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

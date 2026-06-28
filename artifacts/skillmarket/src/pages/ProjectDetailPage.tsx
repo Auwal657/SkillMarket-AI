@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
-import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown, CheckSquare, Share2, Flag } from "lucide-react";
+import { Clock, DollarSign, Users, Calendar, ArrowLeft, Send, CheckCircle, Bookmark, ThumbsUp, ThumbsDown, CheckSquare, Share2, Flag, ExternalLink, Activity } from "lucide-react";
 import ReportModal from "../components/common/ReportModal";
 import {
   useGetProject, useApplyToProject, useListProjectApplications,
@@ -142,7 +142,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // OG / SEO meta update for project page
   useEffect(() => {
     if (!project) return;
     const prev = document.title;
@@ -164,8 +163,8 @@ export default function ProjectDetailPage() {
     return () => { document.title = prev; };
   }, [project]);
 
-  if (isLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
-  if (!project) return <div className="text-center py-20 text-gray-500">Project not found</div>;
+  if (isLoading) return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="xl" /></div>;
+  if (!project) return <div className="flex flex-col items-center justify-center min-h-[60vh] text-center"><Activity size={48} className="text-gray-300 mb-4" /><h2 className="text-2xl font-bold text-gray-900 mb-2">Project not found</h2><p className="text-gray-500 mb-6">This project may have been removed or doesn't exist.</p><Link href="/projects" className="btn-primary">Browse Projects</Link></div>;
 
   const isOwner = user?.id === project.clientId;
   const canApply = user?.role === "freelancer" && !isOwner;
@@ -173,8 +172,8 @@ export default function ProjectDetailPage() {
   const acceptedApp = applications?.find(a => a.status === "accepted") as (typeof applications extends (infer T)[] | undefined ? T : never) & { freelancerProfileId?: number | null } | undefined;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <Link href="/projects" className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-6 transition-colors">
+    <div className="page-container animate-in">
+      <Link href="/projects" className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 mb-8 transition-colors shadow-sm">
         <ArrowLeft size={16} /> Back to Projects
       </Link>
 
@@ -188,85 +187,106 @@ export default function ProjectDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="card p-8">
-            <div className="flex items-start justify-between gap-4 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="badge bg-indigo-100 text-indigo-700">{project.category}</span>
-                <span className={cn("badge", getStatusColor(project.status))}>{project.status.replace("_", " ")}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button onClick={handleShare} className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-xl transition-colors", shareCopied ? "text-green-700 border-green-200 bg-green-50" : "text-gray-500 border-gray-200 hover:bg-gray-50")}>
-                  <Share2 size={13} /> {shareCopied ? "Copied!" : "Share"}
-                </button>
-                {user && !isOwner && (
-                  <button onClick={() => setShowReport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 border border-gray-200 rounded-xl hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors">
-                    <Flag size={13} /> Report
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-8 md:p-10 border-b border-gray-100">
+              <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider rounded-md">{project.category}</span>
+                  <span className={cn("px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-md", getStatusColor(project.status))}>{project.status.replace("_", " ")}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleShare} className={cn("flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-lg transition-colors shadow-sm", shareCopied ? "text-green-700 border-green-200 bg-green-50" : "text-gray-700 border-gray-200 bg-white hover:bg-gray-50")}>
+                    <Share2 size={16} /> {shareCopied ? "Copied!" : "Share"}
                   </button>
-                )}
+                  {user && !isOwner && (
+                    <button onClick={() => setShowReport(true)} className="flex items-center justify-center p-2 text-gray-400 border border-gray-200 bg-white rounded-lg hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors shadow-sm" aria-label="Report project">
+                      <Flag size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight leading-tight mb-4">{project.title}</h1>
+              <div className="flex items-center gap-4 text-sm text-gray-500 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                    {project.clientName?.charAt(0) || "C"}
+                  </div>
+                  <span className="font-medium text-gray-900">{project.clientName ?? "Client"}</span>
+                </div>
+                <div className="w-1 h-1 rounded-full bg-gray-300"></div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar size={14} />
+                  <span>Posted {formatDate(project.createdAt)}</span>
+                </div>
               </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">{project.title}</h1>
-            <p className="text-sm text-gray-400 mb-6">Posted by {project.clientName ?? "Client"} · {formatDate(project.createdAt)}</p>
-            <div className="prose max-w-none">
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{project.description}</p>
+            <div className="p-8 md:p-10">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Activity size={20} className="text-indigo-500" /> Project Description
+              </h2>
+              <div className="prose prose-indigo max-w-none prose-p:leading-relaxed prose-p:text-gray-600">
+                <p className="whitespace-pre-wrap">{project.description}</p>
+              </div>
             </div>
           </div>
 
           {project.requiredSkills && project.requiredSkills.length > 0 && (
-            <div className="card p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">Required Skills</h2>
-              <div className="flex flex-wrap gap-2">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Required Skills</h2>
+              <div className="flex flex-wrap gap-3">
                 {project.requiredSkills.map(s => <SkillBadge key={s} name={s} variant="purple" />)}
               </div>
             </div>
           )}
 
-          {/* Applications (client only) */}
           {isOwner && applications && applications.length > 0 && (
-            <div className="card p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">Applications ({applications.length})</h2>
-              <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                <h2 className="text-xl font-bold text-gray-900">Applications <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-sm ml-2">{applications.length}</span></h2>
+              </div>
+              <div className="divide-y divide-gray-100">
                 {applications.map(app => (
-                  <div key={app.id} className="p-4 border border-gray-100 rounded-xl hover:border-indigo-100 transition-colors">
-                    <div className="flex items-start justify-between mb-2 gap-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={app.freelancerName ?? "F"} size="sm" />
+                  <div key={app.id} className="p-6 hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-4 gap-4">
+                      <div className="flex items-start gap-4">
+                        <Avatar name={app.freelancerName ?? "F"} size="md" />
                         <div>
-                          <Link href={`/freelancers/${app.freelancerId}`} className="font-medium text-indigo-600 hover:text-indigo-800 text-sm">{app.freelancerName ?? "Freelancer"}</Link>
-                          {app.freelancerHeadline && <p className="text-xs text-gray-400">{app.freelancerHeadline}</p>}
+                          <Link href={`/freelancers/${app.freelancerId}`} className="text-lg font-bold text-gray-900 hover:text-indigo-600 transition-colors">{app.freelancerName ?? "Freelancer"}</Link>
+                          {app.freelancerHeadline && <p className="text-sm font-medium text-gray-500 mt-0.5">{app.freelancerHeadline}</p>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={cn("badge", getStatusColor(app.status))}>{app.status}</span>
-                        <span className="font-semibold text-gray-900 text-sm">{formatCurrency(app.proposedRate)}/hr</span>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className="text-xl font-bold text-gray-900">{formatCurrency(app.proposedRate)}<span className="text-sm font-normal text-gray-500">/hr</span></span>
+                        <span className={cn("px-2.5 py-1 text-xs font-bold uppercase tracking-wider rounded-md", getStatusColor(app.status))}>{app.status}</span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-3">{app.coverLetter}</p>
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 shadow-sm">
+                      <p className="text-sm text-gray-600 leading-relaxed italic">"{app.coverLetter}"</p>
+                    </div>
                     {app.status === "pending" && !hasAcceptedApp && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button
                           onClick={() => handleUpdateStatus(app.id, "accepted")}
                           disabled={updatingAppId === app.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-black text-white text-sm font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
                         >
-                          {updatingAppId === app.id ? <span className="animate-spin w-3 h-3 border border-white border-t-transparent rounded-full" /> : <ThumbsUp size={12} />}
-                          Accept
+                          {updatingAppId === app.id ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <ThumbsUp size={16} />}
+                          Accept Proposal
                         </button>
                         <button
                           onClick={() => handleUpdateStatus(app.id, "rejected")}
                           disabled={updatingAppId === app.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium rounded-lg border border-red-200 transition-colors disabled:opacity-50"
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-white hover:bg-red-50 text-red-700 text-sm font-medium border border-gray-200 hover:border-red-200 rounded-lg transition-colors disabled:opacity-50"
                         >
-                          {updatingAppId === app.id ? <span className="animate-spin w-3 h-3 border border-red-600 border-t-transparent rounded-full" /> : <ThumbsDown size={12} />}
+                          {updatingAppId === app.id ? <span className="animate-spin w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full" /> : <ThumbsDown size={16} />}
                           Reject
                         </button>
                       </div>
                     )}
                     {app.status === "accepted" && (
-                      <div className="flex items-center gap-1.5 text-green-700 text-xs font-medium">
-                        <CheckCircle size={12} /> Accepted — working with this freelancer
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 text-sm font-medium rounded-lg border border-green-100">
+                        <CheckCircle size={16} /> Accepted — you are working with this freelancer
                       </div>
                     )}
                   </div>
@@ -276,142 +296,173 @@ export default function ProjectDetailPage() {
           )}
 
           {isOwner && applications && applications.length === 0 && (
-            <div className="card p-6 text-center text-gray-400 text-sm">No applications yet. Share your project to attract talent.</div>
+            <div className="bg-gray-50 border border-gray-200 border-dashed rounded-2xl p-12 text-center">
+              <Users size={40} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-lg font-bold text-gray-900 mb-2">No applications yet</h3>
+              <p className="text-gray-500 max-w-md mx-auto">Applications will appear here once freelancers start applying to your project.</p>
+            </div>
           )}
 
-          {/* Apply form */}
           {canApply && project.status === "open" && (
-            <div className="card p-6">
-              <h2 className="font-semibold text-gray-900 mb-4">Apply to this Project</h2>
-              {success || alreadyApplied ? (
-                <div className="flex items-center gap-3 text-green-700 bg-green-50 rounded-xl p-4">
-                  <CheckCircle size={20} />
-                  {alreadyApplied && !success ? "You've already applied to this project." : "Application submitted successfully!"}
-                </div>
-              ) : applying ? (
-                <form onSubmit={handleApply} className="space-y-4">
-                  {error && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+            <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+              <div className="p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">Apply to this Project</h2>
+                {success || alreadyApplied ? (
+                  <div className="flex items-center gap-4 bg-green-50 text-green-800 p-6 rounded-xl border border-green-200 shadow-sm">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <CheckCircle size={24} className="text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-green-900 text-lg mb-1">
+                        {alreadyApplied && !success ? "Application Sent" : "Success!"}
+                      </h3>
+                      <p className="text-green-700">
+                        {alreadyApplied && !success 
+                          ? "You have already applied to this project. The client will review your proposal." 
+                          : "Your application has been submitted successfully."}
+                      </p>
+                    </div>
+                  </div>
+                ) : applying ? (
+                  <form onSubmit={handleApply} className="space-y-6">
+                    {error && <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 flex items-start gap-3"><Flag size={18} className="mt-0.5 flex-shrink-0" /><p>{error}</p></div>}
+                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
+                      <label className="block text-sm font-bold text-gray-900 mb-2">Your Proposed Hourly Rate (USD)</label>
+                      <div className="relative max-w-xs">
+                        <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input type="number" min="1" step="0.01" value={form.proposedRate} onChange={e => setForm(f => ({ ...f, proposedRate: e.target.value }))} className="input pl-11 py-3 text-lg font-bold" placeholder="e.g. 25.00" required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">Cover Letter</label>
+                      <p className="text-sm text-gray-500 mb-3">Introduce yourself, explain why you're a strong fit, and highlight relevant past work.</p>
+                      <textarea value={form.coverLetter} onChange={e => setForm(f => ({ ...f, coverLetter: e.target.value }))} className="input min-h-[200px] p-4 text-base" placeholder="Write a compelling proposal..." required />
+                      <div className="flex justify-between items-center mt-2">
+                        <p className={cn("text-xs font-medium", form.coverLetter.length < 50 ? "text-red-500" : "text-green-600")}>{form.coverLetter.length} / 50 min characters</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                      <button type="submit" disabled={applyMutation.isPending} className="btn-primary py-3.5 px-8 text-base">
+                        {applyMutation.isPending ? <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <><Send size={18} /> Submit Proposal</>}
+                      </button>
+                      <button type="button" onClick={() => { setApplying(false); setError(""); }} className="btn-secondary py-3.5 px-8 text-base">Cancel</button>
+                    </div>
+                  </form>
+                ) : (
                   <div>
-                    <label className="label">Your Hourly Rate (USD)</label>
-                    <input type="number" min="1" step="0.01" value={form.proposedRate} onChange={e => setForm(f => ({ ...f, proposedRate: e.target.value }))} className="input" placeholder="e.g. 25" required />
+                    {!user ? (
+                      <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
+                        <p className="text-gray-600 mb-4 font-medium">You need an account to apply to projects.</p>
+                        <Link href="/login" className="btn-primary inline-flex">Sign in to Apply</Link>
+                      </div>
+                    ) : (
+                      <button onClick={() => setApplying(true)} className="btn-primary py-4 px-8 text-lg w-full sm:w-auto justify-center shadow-md hover:shadow-lg"><Send size={20} /> Submit a Proposal</button>
+                    )}
                   </div>
-                  <div>
-                    <label className="label">Cover Letter <span className="text-gray-400 font-normal">(min. 50 characters)</span></label>
-                    <textarea value={form.coverLetter} onChange={e => setForm(f => ({ ...f, coverLetter: e.target.value }))} className="input min-h-32" placeholder="Why are you a great fit for this project? Highlight relevant experience and skills..." required />
-                    <p className="text-xs text-gray-400 mt-1">{form.coverLetter.length} characters</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button type="submit" disabled={applyMutation.isPending} className="btn-primary">
-                      {applyMutation.isPending ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> : <><Send size={16} /> Submit Application</>}
-                    </button>
-                    <button type="button" onClick={() => { setApplying(false); setError(""); }} className="btn-secondary">Cancel</button>
-                  </div>
-                </form>
-              ) : (
-                <div>
-                  {!user ? (
-                    <Link href="/login" className="btn-primary">Sign in to Apply</Link>
-                  ) : (
-                    <button onClick={() => setApplying(true)} className="btn-primary"><Send size={16} /> Apply Now</button>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
           {canApply && project.status !== "open" && (
-            <div className="card p-6 text-center text-gray-500">This project is no longer accepting applications.</div>
+            <div className="bg-gray-50 border border-gray-200 border-dashed rounded-2xl p-8 text-center">
+              <CheckCircle size={32} className="mx-auto text-gray-400 mb-3" />
+              <p className="text-lg font-medium text-gray-700">This project is no longer accepting applications.</p>
+            </div>
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4">
-          <div className="card p-6 space-y-4">
-            <h3 className="font-semibold text-gray-900">Project Details</h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-3 text-gray-600">
-                <DollarSign size={16} className="text-indigo-500 flex-shrink-0" />
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-6 border-b border-gray-100 pb-4">Project Overview</h3>
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                  <DollarSign size={24} className="text-indigo-600" />
+                </div>
                 <div>
-                  <p className="text-xs text-gray-400">Budget</p>
-                  <p className="font-medium text-gray-900">{formatCurrency(project.budgetMin)} – {formatCurrency(project.budgetMax)}</p>
+                  <p className="text-sm font-medium text-gray-500 mb-1">Budget Range</p>
+                  <p className="text-lg font-bold text-gray-900">{formatCurrency(project.budgetMin)} <span className="text-gray-400 font-normal mx-1">–</span> {formatCurrency(project.budgetMax)}</p>
                 </div>
               </div>
               {project.timelineWeeks && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <Clock size={16} className="text-indigo-500 flex-shrink-0" />
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Clock size={24} className="text-blue-600" />
+                  </div>
                   <div>
-                    <p className="text-xs text-gray-400">Timeline</p>
-                    <p className="font-medium text-gray-900">{project.timelineWeeks} weeks</p>
+                    <p className="text-sm font-medium text-gray-500 mb-1">Expected Timeline</p>
+                    <p className="text-lg font-bold text-gray-900">{project.timelineWeeks} weeks</p>
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-3 text-gray-600">
-                <Users size={16} className="text-indigo-500 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-400">Applications</p>
-                  <p className="font-medium text-gray-900">{project.applicationCount ?? 0}</p>
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
+                  <Users size={24} className="text-purple-600" />
                 </div>
-              </div>
-              <div className="flex items-center gap-3 text-gray-600">
-                <Calendar size={16} className="text-indigo-500 flex-shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-400">Posted</p>
-                  <p className="font-medium text-gray-900">{formatDate(project.createdAt)}</p>
+                  <p className="text-sm font-medium text-gray-500 mb-1">Proposals</p>
+                  <p className="text-lg font-bold text-gray-900">{project.applicationCount ?? 0}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Mark Complete button — visible to client when project is in_progress */}
           {isOwner && project.status === "in_progress" && (
-            <button
-              onClick={handleMarkComplete}
-              disabled={completing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              {completing
-                ? <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                : <CheckSquare size={16} />}
-              {completing ? "Completing..." : "Mark as Complete"}
-            </button>
+            <div className="bg-gray-900 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+              <h3 className="text-lg font-bold mb-2 relative z-10">Project Management</h3>
+              <p className="text-gray-300 text-sm mb-6 relative z-10">When the work is finalized, mark the project as complete to proceed to reviews.</p>
+              <button
+                onClick={handleMarkComplete}
+                disabled={completing}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-green-500 hover:bg-green-400 text-gray-900 text-sm font-bold transition-all shadow-md disabled:opacity-50 relative z-10"
+              >
+                {completing
+                  ? <span className="animate-spin w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full" />
+                  : <CheckSquare size={18} />}
+                {completing ? "Completing..." : "Mark Work as Complete"}
+              </button>
+            </div>
           )}
 
           {isOwner && project.status === "completed" && (
-            <div className="card p-4 bg-green-50 border-green-200 text-center">
-              <CheckCircle size={20} className="text-green-600 mx-auto mb-2" />
-              <p className="text-sm font-medium text-green-800">Project Completed</p>
-              {acceptedApp?.freelancerProfileId ? (
+            <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center shadow-sm">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle size={32} className="text-green-600" />
+              </div>
+              <h3 className="text-xl font-bold text-green-900 mb-2">Project Completed</h3>
+              <p className="text-green-700 text-sm mb-6">Great job! This project is officially closed.</p>
+              {acceptedApp?.freelancerProfileId && (
                 <Link
                   href={`/freelancers/${acceptedApp.freelancerProfileId}`}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-green-700 underline hover:text-green-900"
+                  className="inline-flex items-center justify-center w-full px-4 py-3 bg-white text-green-700 font-bold text-sm border border-green-200 rounded-xl hover:bg-green-50 transition-colors shadow-sm"
                 >
-                  Leave a review for {acceptedApp.freelancerName ?? "the freelancer"} →
+                  Leave a Review →
                 </Link>
-              ) : (
-                <p className="text-xs text-green-600 mt-1">You can now review the freelancer</p>
               )}
             </div>
           )}
 
           {user && !isOwner && (
-            <>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
               <button
                 onClick={handleSaveProject}
                 disabled={savingProject}
                 className={cn(
-                  "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors",
+                  "w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border text-sm font-bold transition-all",
                   isSaved
-                    ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
                 )}
               >
-                <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
-                {savingProject ? "Saving..." : isSaved ? "Saved" : "Save Project"}
+                <Bookmark size={18} className={isSaved ? "fill-current" : ""} />
+                {savingProject ? "Saving..." : isSaved ? "Saved to Profile" : "Save for Later"}
               </button>
-              {saveError && <p className="text-xs text-red-500 text-center">{saveError}</p>}
-            </>
+              {saveError && <p className="text-xs font-medium text-red-500 text-center mt-3">{saveError}</p>}
+            </div>
           )}
 
-          {/* Escrow payment panel — shown for in_progress projects */}
           {["in_progress", "completed"].includes(project.status) && user && (
             <EscrowPanel
               projectId={pid}
@@ -422,17 +473,22 @@ export default function ProjectDetailPage() {
           )}
 
           {isOwner && project.status === "open" && (
-            <Link href={`/projects/${pid}/edit`} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-              Edit Project
-            </Link>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <h3 className="font-bold text-gray-900 mb-4">Administration</h3>
+              <Link href={`/projects/${pid}/edit`} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+                Edit Project Details
+              </Link>
+            </div>
           )}
 
           {!user && (
-            <div className="card p-6 text-center">
-              <p className="text-sm text-gray-600 mb-4">Sign in to apply or save this project</p>
-              <div className="space-y-2">
-                <Link href="/login" className="btn-primary w-full justify-center">Sign In</Link>
-                <Link href="/register" className="btn-secondary w-full justify-center text-sm">Create Account</Link>
+            <div className="bg-gray-50 rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
+              <Users size={32} className="mx-auto text-gray-400 mb-4" />
+              <h3 className="font-bold text-gray-900 mb-2">Interested in this project?</h3>
+              <p className="text-sm text-gray-600 mb-6">Join SkillMarket to submit a proposal and start working.</p>
+              <div className="space-y-3">
+                <Link href="/register" className="btn-primary w-full justify-center py-3">Create an Account</Link>
+                <Link href="/login" className="block text-sm font-medium text-indigo-600 hover:text-indigo-800">Already have an account? Sign in</Link>
               </div>
             </div>
           )}

@@ -33,32 +33,39 @@ export default function UnverifiedBanner() {
   };
 
   return (
-    <div className="bg-amber-50 border-b border-amber-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-3">
-        <MailWarning size={17} className="text-amber-600 shrink-0" />
-        <p className="text-amber-800 text-sm flex-1">
-          <span className="font-medium">Verify your email</span>
-          {" — "}Please check your inbox and click the verification link to unlock all features.
-          {error && <span className="text-red-600 ml-2">{error}</span>}
-          {sent && <span className="text-green-700 ml-2">Email sent! Check your inbox.</span>}
-        </p>
-        {!sent && (
+    <div className="bg-amber-50/80 backdrop-blur-sm border-b border-amber-200/60 sticky top-16 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-amber-100 rounded-md">
+            <MailWarning size={16} className="text-amber-700 shrink-0" />
+          </div>
+          <p className="text-amber-900 text-sm">
+            <span className="font-semibold">Verify your email address</span>
+            <span className="hidden sm:inline"> to unlock all platform features.</span>
+            {error && <span className="text-red-600 ml-2 block sm:inline">{error}</span>}
+            {sent && <span className="text-green-700 ml-2 block sm:inline">Email sent! Check your inbox.</span>}
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto pl-9 sm:pl-0">
+          {!sent && (
+            <button
+              onClick={handleResend}
+              disabled={sending}
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900 bg-amber-200/50 hover:bg-amber-200 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={sending ? "animate-spin" : ""} />
+              {sending ? "Sending…" : "Resend Email"}
+            </button>
+          )}
           <button
-            onClick={handleResend}
-            disabled={sending}
-            className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            onClick={() => setDismissed(true)}
+            className="text-amber-600 hover:text-amber-900 p-1 rounded-md hover:bg-amber-200/50 transition-colors ml-auto sm:ml-0"
+            aria-label="Dismiss"
           >
-            <RefreshCw size={13} className={sending ? "animate-spin" : ""} />
-            {sending ? "Sending…" : "Resend email"}
+            <X size={16} />
           </button>
-        )}
-        <button
-          onClick={() => setDismissed(true)}
-          className="shrink-0 text-amber-500 hover:text-amber-700 ml-1"
-          aria-label="Dismiss"
-        >
-          <X size={16} />
-        </button>
+        </div>
       </div>
     </div>
   );

@@ -216,7 +216,7 @@ export default function ClientDashboard() {
             </div>
           </div>
           <div className="card p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-100">
-            <h3 className="font-semibold text-indigo-900 mb-2">💡 Pro Tip</h3>
+            <h3 className="font-semibold text-indigo-900 mb-2">Pro Tip</h3>
             <p className="text-sm text-indigo-700 leading-relaxed">Add specific required skills to your projects to get better AI-matched applications from the right freelancers.</p>
           </div>
         </div>

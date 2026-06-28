@@ -140,7 +140,7 @@ export default function FreelancerAnalytics() {
             <div className="space-y-3">
               {[
                 { label: "Hourly Rate", value: formatCurrency(data.hourlyRate) + "/hr" },
-                { label: "Availability", value: data.availabilityStatus === "available" ? "✅ Available" : data.availabilityStatus === "busy" ? "🟡 Busy" : "🔴 Unavailable" },
+                { label: "Availability", value: data.availabilityStatus === "available" ? "Available" : data.availabilityStatus === "busy" ? "Busy" : "Unavailable" },
               ].map(row => (
                 <div key={row.label} className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">{row.label}</span>

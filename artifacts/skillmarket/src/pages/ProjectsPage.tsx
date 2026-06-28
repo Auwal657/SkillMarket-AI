@@ -43,101 +43,137 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Browse Projects</h1>
-        <p className="text-gray-500">Find your next opportunity</p>
+    <div className="page-container">
+      <div className="mb-10 text-center md:text-left">
+        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl mb-3">Browse Projects</h1>
+        <p className="text-lg text-gray-600 max-w-2xl">Find your next opportunity and start building amazing things.</p>
       </div>
 
-      {/* Search + Filters row */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input value={q} onChange={e => { setQ(e.target.value); setPage(0); }} className="input pl-11" placeholder="Search projects..." />
-        </div>
-        <select value={category} onChange={e => { setCategory(e.target.value); setPage(0); }} className="input sm:w-44">
-          <option value="">All Categories</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={status} onChange={e => { setStatus(e.target.value); setPage(0); }} className="input sm:w-40">
-          <option value="">Any Status</option>
-          {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        <button
-          onClick={() => setShowAdvanced(v => !v)}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2 text-sm border rounded-xl transition-colors",
-            showAdvanced || hasAdvancedFilters
-              ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-              : "border-gray-200 text-gray-500 hover:bg-gray-50"
-          )}
-        >
-          <SlidersHorizontal size={14} />
-          Filters
-          {hasAdvancedFilters && <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />}
-          {showAdvanced ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        </button>
-        {(q || category || hasAdvancedFilters) && (
-          <button onClick={clearAll} className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50">
-            <X size={14} /> Clear
-          </button>
-        )}
-      </div>
-
-      {/* Advanced Filters Panel */}
-      {showAdvanced && (
-        <div className="card p-5 mb-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="label text-xs">Min Budget ($/hr)</label>
-            <input type="number" min="0" value={budgetMin} onChange={e => { setBudgetMin(e.target.value); setPage(0); }} placeholder="e.g. 10" className="input" />
+      <div className="card p-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input 
+              value={q} 
+              onChange={e => { setQ(e.target.value); setPage(0); }} 
+              className="input pl-11 bg-gray-50 border-transparent focus:bg-white" 
+              placeholder="Search projects..." 
+            />
           </div>
-          <div>
-            <label className="label text-xs">Max Budget ($/hr)</label>
-            <input type="number" min="0" value={budgetMax} onChange={e => { setBudgetMax(e.target.value); setPage(0); }} placeholder="e.g. 100" className="input" />
-          </div>
-          <div>
-            <label className="label text-xs">Required Skill</label>
-            <select value={selectedSkill} onChange={e => { setSelectedSkill(e.target.value); setPage(0); }} className="input">
-              <option value="">Any Skill</option>
-              {SKILL_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <select 
+              value={category} 
+              onChange={e => { setCategory(e.target.value); setPage(0); }} 
+              className="input bg-gray-50 border-transparent focus:bg-white sm:w-48"
+            >
+              <option value="">All Categories</option>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <select 
+              value={status} 
+              onChange={e => { setStatus(e.target.value); setPage(0); }} 
+              className="input bg-gray-50 border-transparent focus:bg-white sm:w-44"
+            >
+              <option value="">Any Status</option>
+              {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+            <button
+              onClick={() => setShowAdvanced(v => !v)}
+              className={cn(
+                "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
+                showAdvanced || hasAdvancedFilters
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
+              )}
+            >
+              <SlidersHorizontal size={16} />
+              Filters
+              {hasAdvancedFilters && <span className="w-2 h-2 bg-indigo-600 rounded-full" />}
+              {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {(q || category || hasAdvancedFilters) && (
+              <button 
+                onClick={clearAll} 
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 whitespace-nowrap"
+              >
+                <X size={16} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showAdvanced && (
+        <div className="card p-6 mb-8 bg-gray-50/50 border-gray-200 animate-in">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="label">Min Budget ($/hr)</label>
+              <input type="number" min="0" value={budgetMin} onChange={e => { setBudgetMin(e.target.value); setPage(0); }} placeholder="e.g. 10" className="input bg-white" />
+            </div>
+            <div>
+              <label className="label">Max Budget ($/hr)</label>
+              <input type="number" min="0" value={budgetMax} onChange={e => { setBudgetMax(e.target.value); setPage(0); }} placeholder="e.g. 100" className="input bg-white" />
+            </div>
+            <div>
+              <label className="label">Required Skill</label>
+              <select value={selectedSkill} onChange={e => { setSelectedSkill(e.target.value); setPage(0); }} className="input bg-white">
+                <option value="">Any Skill</option>
+                {SKILL_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <label className="label mb-3">Popular Skills</label>
+            <div className="flex flex-wrap gap-2">
+              {SKILL_OPTIONS.slice(0, 8).map(s => (
+                <button 
+                  key={s} 
+                  onClick={() => { setSelectedSkill(selectedSkill === s ? "" : s); setPage(0); }}
+                  className={cn(
+                    "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200",
+                    selectedSkill === s 
+                      ? "bg-indigo-600 text-white shadow-md" 
+                      : "bg-white text-gray-600 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Skill quick-pills */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {SKILL_OPTIONS.slice(0, 8).map(s => (
-          <button key={s} onClick={() => { setSelectedSkill(selectedSkill === s ? "" : s); setPage(0); }}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-              selectedSkill === s ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            )}>
-            {s}
-          </button>
-        ))}
-      </div>
-
       {isLoading ? (
-        <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>
+        <div className="flex justify-center py-32"><LoadingSpinner size="lg" /></div>
       ) : projects && projects.length > 0 ? (
-        <>
-          <p className="text-sm text-gray-400 mb-4">{projects.length} result{projects.length !== 1 ? "s" : ""}</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="animate-in">
+          <div className="flex justify-between items-end mb-6">
+            <p className="text-sm font-medium text-gray-500">
+              Showing <span className="text-gray-900 font-semibold">{projects.length}</span> project{projects.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {projects.map(p => (
               <ProjectCard key={p.id} id={p.id} title={p.title} description={p.description} category={p.category}
                 budgetMin={p.budgetMin} budgetMax={p.budgetMax} timelineWeeks={p.timelineWeeks} status={p.status}
                 clientName={p.clientName} requiredSkills={p.requiredSkills} applicationCount={p.applicationCount} createdAt={p.createdAt} />
             ))}
           </div>
-          <div className="flex items-center justify-center gap-4 mt-10">
-            <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-5 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-            <span className="text-sm text-gray-500">Page {page + 1}</span>
-            <button disabled={(projects?.length ?? 0) < limit} onClick={() => setPage(p => p + 1)} className="px-5 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+          <div className="flex items-center justify-center gap-4 mt-12 pt-8 border-t border-gray-100">
+            <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="btn-secondary">Previous</button>
+            <span className="text-sm font-medium text-gray-600 bg-gray-100 px-4 py-2 rounded-lg">Page {page + 1}</span>
+            <button disabled={(projects?.length ?? 0) < limit} onClick={() => setPage(p => p + 1)} className="btn-secondary">Next</button>
           </div>
-        </>
+        </div>
       ) : (
-        <EmptyState icon={SlidersHorizontal} title="No projects found" description="Try adjusting your filters or search query." />
+        <EmptyState 
+          icon={SlidersHorizontal} 
+          title="No projects found" 
+          description="We couldn't find any projects matching your current filters. Try broadening your search criteria." 
+          action={{ label: "Clear Filters", onClick: clearAll }}
+        />
       )}
     </div>
   );
