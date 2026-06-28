@@ -1,15 +1,34 @@
 import { Link } from "wouter";
-import { DollarSign, FileText, CheckCircle, Eye, Star, Zap, ArrowRight, TrendingUp } from "lucide-react";
-import { useGetFreelancerDashboard, useGetAiRecommendations } from "@workspace/api-client-react";
+import { DollarSign, FileText, CheckCircle, Eye, Star, Zap, ArrowRight, TrendingUp, RefreshCw } from "lucide-react";
+import { useGetFreelancerDashboard, useGetAiRecommendations, getGetAiRecommendationsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ProjectCard from "../../components/common/ProjectCard";
 import { formatCurrency, getStatusColor, formatRelativeTime, cn } from "../../lib/utils";
 
+function MatchScoreBadge({ score }: { score: number }) {
+  const color =
+    score >= 80 ? "bg-green-600" :
+    score >= 60 ? "bg-indigo-600" :
+    score >= 40 ? "bg-amber-500" : "bg-gray-500";
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-white shadow-sm ${color}`}>
+      <Zap size={10} />
+      {score}% match
+    </span>
+  );
+}
+
 export default function FreelancerDashboard() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: dashboard, isLoading } = useGetFreelancerDashboard();
-  const { data: recommendations } = useGetAiRecommendations();
+  const {
+    data: recommendations,
+    isFetching: recFetching,
+    refetch: refetchRecs,
+  } = useGetAiRecommendations();
 
   if (isLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
 
@@ -19,6 +38,11 @@ export default function FreelancerDashboard() {
     { icon: CheckCircle, label: "Accepted", value: dashboard?.acceptedApplications ?? 0, color: "text-indigo-600 bg-indigo-50" },
     { icon: Eye, label: "Profile Views", value: dashboard?.profileViews ?? 0, color: "text-purple-600 bg-purple-50" },
   ];
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: getGetAiRecommendationsQueryKey() });
+    refetchRecs();
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -107,23 +131,44 @@ export default function FreelancerDashboard() {
       </div>
 
       {/* AI Recommendations */}
-      {recommendations && recommendations.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center gap-2 mb-5">
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
             <Zap size={20} className="text-indigo-600" />
             <h2 className="font-semibold text-gray-900">AI-Matched Projects</h2>
             <span className="badge bg-indigo-100 text-indigo-700">Recommended for you</span>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={recFetching}
+            className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={14} className={recFetching ? "animate-spin" : ""} />
+            {recFetching ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+
+        {recFetching && !recommendations && (
+          <div className="flex justify-center py-10"><LoadingSpinner size="md" /></div>
+        )}
+
+        {!recFetching && recommendations && recommendations.length === 0 && (
+          <div className="card p-8 text-center text-gray-400">
+            <Zap className="mx-auto mb-3 opacity-30" size={32} />
+            <p className="font-medium text-gray-600 mb-1">No matches yet</p>
+            <p className="text-sm">Add skills to your profile to get AI-matched project recommendations.</p>
+            <Link href="/profile/skills" className="mt-4 btn-primary text-sm inline-flex">Add Skills</Link>
+          </div>
+        )}
+
+        {recommendations && recommendations.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {recommendations.slice(0, 6).map(rec => (
-              <div key={rec.project.id} className="relative">
-                {rec.matchScore !== undefined && (
-                  <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-1">
-                    <span className="badge bg-indigo-600 text-white font-semibold shadow-sm">
-                      {rec.matchScore}% match
-                    </span>
-                  </div>
-                )}
+              <div key={rec.project.id} className="relative group">
+                {/* Match score overlay */}
+                <div className="absolute top-3 right-3 z-10">
+                  <MatchScoreBadge score={rec.matchScore} />
+                </div>
                 <ProjectCard
                   id={rec.project.id}
                   title={rec.project.title}
@@ -138,20 +183,24 @@ export default function FreelancerDashboard() {
                   applicationCount={rec.project.applicationCount}
                   createdAt={rec.project.createdAt}
                 />
+                {/* Match reasons */}
                 {rec.matchReasons && rec.matchReasons.length > 0 && (
-                  <div className="mt-1.5 px-1 flex flex-wrap gap-1">
-                    {rec.matchReasons.slice(0, 3).map((reason, i) => (
-                      <span key={i} className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                        {reason}
-                      </span>
-                    ))}
+                  <div className="mt-2 px-1 space-y-1">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Why this match</p>
+                    <div className="flex flex-wrap gap-1">
+                      {rec.matchReasons.map((reason, i) => (
+                        <span key={i} className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                          {reason}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

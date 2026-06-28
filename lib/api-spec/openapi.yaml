@@ -697,6 +697,21 @@ paths:
                 items:
                   $ref: "#/components/schemas/AiRecommendation"
 
+  /dashboard/ai-freelancers:
+    get:
+      operationId: getAiFreelancerRecommendations
+      tags: [dashboard]
+      summary: Get AI-matched freelancer recommendations for client's open projects
+      responses:
+        "200":
+          description: Per-project freelancer recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectFreelancerRecommendations"
+
 components:
   schemas:
     HealthStatus:
@@ -1112,3 +1127,95 @@ components:
           type: array
           items:
             type: string
+
+    FreelancerSkillBrief:
+      type: object
+      properties:
+        skillName:
+          type: string
+        proficiencyLevel:
+          type: string
+
+    FreelancerBrief:
+      type: object
+      required: [id, userId, headline, hourlyRate, availabilityStatus, completedProjects]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            avatarUrl:
+              type: string
+              nullable: true
+            university:
+              type: string
+              nullable: true
+        headline:
+          type: string
+        bio:
+          type: string
+        hourlyRate:
+          type: number
+        availabilityStatus:
+          type: string
+        completedProjects:
+          type: integer
+        averageRating:
+          type: number
+          nullable: true
+        totalReviews:
+          type: integer
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/FreelancerSkillBrief"
+
+    FreelancerRecommendation:
+      type: object
+      required: [freelancer, matchScore, matchReasons]
+      properties:
+        freelancer:
+          $ref: "#/components/schemas/FreelancerBrief"
+        matchScore:
+          type: integer
+        matchReasons:
+          type: array
+          items:
+            type: string
+
+    ProjectBrief:
+      type: object
+      required: [id, title, category, requiredSkills, budgetMin, budgetMax]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        category:
+          type: string
+        requiredSkills:
+          type: array
+          items:
+            type: string
+        budgetMin:
+          type: number
+        budgetMax:
+          type: number
+
+    ProjectFreelancerRecommendations:
+      type: object
+      required: [project, recommendations]
+      properties:
+        project:
+          $ref: "#/components/schemas/ProjectBrief"
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/FreelancerRecommendation"

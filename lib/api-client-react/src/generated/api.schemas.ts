@@ -316,6 +316,52 @@ export interface AiRecommendation {
   matchReasons: string[];
 }
 
+export interface FreelancerSkillBrief {
+  skillName?: string;
+  proficiencyLevel?: string;
+}
+
+export interface FreelancerBriefUser {
+  id?: number;
+  name?: string;
+  avatarUrl?: string | null;
+  university?: string | null;
+}
+
+export interface FreelancerBrief {
+  id: number;
+  userId: number;
+  user?: FreelancerBriefUser;
+  headline: string;
+  bio?: string;
+  hourlyRate: number;
+  availabilityStatus: string;
+  completedProjects: number;
+  averageRating?: number | null;
+  totalReviews?: number;
+  skills?: FreelancerSkillBrief[];
+}
+
+export interface FreelancerRecommendation {
+  freelancer: FreelancerBrief;
+  matchScore: number;
+  matchReasons: string[];
+}
+
+export interface ProjectBrief {
+  id: number;
+  title: string;
+  category: string;
+  requiredSkills: string[];
+  budgetMin: number;
+  budgetMax: number;
+}
+
+export interface ProjectFreelancerRecommendations {
+  project: ProjectBrief;
+  recommendations: FreelancerRecommendation[];
+}
+
 export type ListFreelancersParams = {
 skill?: string;
 search?: string;

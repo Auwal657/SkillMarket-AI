@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ProjectFreelancerRecommendations,
   AiRecommendation,
   Application,
   ApplicationInput,
@@ -2447,6 +2448,47 @@ export function useGetClientDashboard<TData = Awaited<ReturnType<typeof getClien
 
 
 
+
+export const getGetAiFreelancerRecommendationsUrl = () => {
+  return `/api/dashboard/ai-freelancers`
+}
+
+/**
+ * @summary Get AI-matched freelancer recommendations for client's open projects
+ */
+export const getAiFreelancerRecommendations = async (options?: RequestInit): Promise<ProjectFreelancerRecommendations[]> => {
+  return customFetch<ProjectFreelancerRecommendations[]>(getGetAiFreelancerRecommendationsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+}
+
+export const getGetAiFreelancerRecommendationsQueryKey = () => {
+  return [`/api/dashboard/ai-freelancers`] as const;
+}
+
+export const getGetAiFreelancerRecommendationsQueryOptions = <TData = Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch> }
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetAiFreelancerRecommendationsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>> = ({ signal }) => getAiFreelancerRecommendations({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAiFreelancerRecommendationsQueryResult = NonNullable<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>>
+export type GetAiFreelancerRecommendationsQueryError = ErrorType<unknown>
+
+/**
+ * @summary Get AI-matched freelancer recommendations for client's open projects
+ */
+export function useGetAiFreelancerRecommendations<TData = Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiFreelancerRecommendationsQueryOptions(options)
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getGetAiRecommendationsUrl = () => {
 
