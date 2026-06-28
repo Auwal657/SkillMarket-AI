@@ -4,3 +4,4 @@
 - [Socket.IO setup](socket-setup.md) — Socket.IO uses HTTP server wrapping Express; cookie parsed manually from handshake header (not cookie-parser); module-level singleton socket in frontend; REST fallback when socket disconnected.
 - [api-client-react params](api-client-react-params.md) — ListProjectsParams lives in node_modules/@workspace/api-client-react/src/generated/api.schemas.ts; package exports src/index.ts directly so Vite picks up TS edits without a rebuild step.
 - [Write tool guardrail](write-tool-guardrail.md) — write tool rejects files not read in current session; use edit for existing files even when rewriting most content.
+- [Payment & Escrow system](payment-escrow.md) — full Paystack escrow system built; amounts stored as numeric(14,2) NGN; Paystack kobo conversion in lib; dev mode simulates payment when PAYSTACK_SECRET_KEY absent; escrow auto-released on project completion via releaseEscrow() hook in projects.ts.
