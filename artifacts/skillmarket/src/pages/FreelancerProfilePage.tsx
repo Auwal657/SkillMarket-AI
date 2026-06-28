@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
@@ -8,6 +8,7 @@ import SkillBadge from "../components/common/SkillBadge";
 import StarRating from "../components/common/StarRating";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import ReportModal from "../components/common/ReportModal";
+import InviteModal from "../components/common/InviteModal";
 import { formatCurrency, getAvailabilityColor, formatDate, cn } from "../lib/utils";
 
 interface Review {
@@ -37,6 +38,7 @@ export default function FreelancerProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveChecked, setSaveChecked] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
 
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -169,6 +171,14 @@ export default function FreelancerProfilePage() {
         />
       )}
 
+      {showInvite && user?.role === "client" && (
+        <InviteModal
+          freelancerProfileId={fid}
+          freelancerName={name}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Sidebar */}
         <div className="space-y-4">
@@ -220,9 +230,17 @@ export default function FreelancerProfilePage() {
 
             <div className="mt-5 space-y-2">
               {user?.role === "client" && (
-                <button onClick={handleContact} className="btn-primary w-full justify-center">
-                  <MessageCircle size={16} /> Contact
-                </button>
+                <>
+                  <button onClick={handleContact} className="btn-primary w-full justify-center">
+                    <MessageCircle size={16} /> Contact
+                  </button>
+                  <button
+                    onClick={() => setShowInvite(true)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors"
+                  >
+                    <Send size={15} /> Invite to Project
+                  </button>
+                </>
               )}
               {user && (
                 <button

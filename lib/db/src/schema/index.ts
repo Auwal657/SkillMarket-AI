@@ -10,3 +10,4 @@ export * from "./messages";
 export * from "./notifications";
 export * from "./password_reset_tokens";
 export * from "./reports";
+export * from "./project_invitations";
