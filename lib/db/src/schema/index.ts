@@ -8,3 +8,4 @@ export * from "./reviews";
 export * from "./saved_items";
 export * from "./messages";
 export * from "./notifications";
+export * from "./password_reset_tokens";

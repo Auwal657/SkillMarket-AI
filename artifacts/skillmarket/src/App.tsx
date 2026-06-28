@@ -10,6 +10,8 @@ import EditProjectPage from "./pages/EditProjectPage";
 import FreelancerProfilePage from "./pages/FreelancerProfilePage";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import FreelancerDashboard from "./pages/dashboard/FreelancerDashboard";
 import ClientDashboard from "./pages/dashboard/ClientDashboard";
 import MyApplicationsPage from "./pages/dashboard/MyApplicationsPage";
@@ -44,6 +46,8 @@ export default function App() {
             <Route path="/freelancers/:id" component={FreelancerProfilePage} />
             <Route path="/login" component={LoginPage} />
             <Route path="/register" component={RegisterPage} />
+            <Route path="/forgot-password" component={ForgotPasswordPage} />
+            <Route path="/reset-password" component={ResetPasswordPage} />
             <Route path="/dashboard">
               <ProtectedRoute role="freelancer">
                 <FreelancerDashboard />
