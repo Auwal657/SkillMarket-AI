@@ -168,9 +168,18 @@ app.get("/og/project/:id", async (req, res) => {
   }
 });
 
-app.use((_req, res) => {
-  res.status(404).json({ error: "Not found" });
-});
+// In production, serve the built React frontend and handle SPA routing
+if (process.env.NODE_ENV === "production") {
+  const frontendDist = path.join(process.cwd(), "artifacts/skillmarket/dist");
+  app.use(express.static(frontendDist));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+} else {
+  app.use((_req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
+}
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error(err);
