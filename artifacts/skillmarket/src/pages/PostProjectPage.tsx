@@ -71,11 +71,11 @@ export default function PostProjectPage() {
         )}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50">
+          <div className="px-5 sm:px-8 py-5 sm:py-6 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-xl font-bold text-gray-900">1. Basic Details</h2>
             <p className="text-sm text-gray-500 mt-1">Give your project a clear title and specify the category.</p>
           </div>
-          <div className="p-8 space-y-6">
+          <div className="p-5 sm:p-8 space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">Project Title <span className="text-red-500">*</span></label>
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="input text-lg py-3" placeholder="e.g. Build a React dashboard for my startup" required />
@@ -92,11 +92,11 @@ export default function PostProjectPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50">
+          <div className="px-5 sm:px-8 py-5 sm:py-6 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-xl font-bold text-gray-900">2. Scope & Requirements</h2>
             <p className="text-sm text-gray-500 mt-1">Describe the work and the skills needed to complete it.</p>
           </div>
-          <div className="p-8 space-y-6">
+          <div className="p-5 sm:p-8 space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">Project Description <span className="text-red-500">*</span></label>
               <p className="text-xs text-gray-500 mb-3">Provide clear expectations, deliverables, and any existing assets.</p>
@@ -132,11 +132,11 @@ export default function PostProjectPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50">
+          <div className="px-5 sm:px-8 py-5 sm:py-6 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-xl font-bold text-gray-900">3. Budget & Timeline</h2>
             <p className="text-sm text-gray-500 mt-1">Set expectations for compensation and delivery.</p>
           </div>
-          <div className="p-8 space-y-8">
+          <div className="p-5 sm:p-8 space-y-8">
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-4">Hourly Budget Range (USD) <span className="text-red-500">*</span></label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

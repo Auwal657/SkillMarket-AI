@@ -1,0 +1,49 @@
+Perform a complete responsive UI/UX overhaul without changing or breaking any existing features, backend logic, authentication, AI recommendations, payments, dashboards, analytics, or database functionality.
+
+GOAL:
+Transform SkillMarket AI into a premium, production-ready marketplace that works flawlessly on desktop, tablet, and mobile devices.
+
+DESKTOP (Laptop):
+- Keep the existing premium modern design.
+- Ensure the navigation bar is perfectly aligned.
+- Keep Browse Projects, Find Talent, Sign In, and Get Started visible.
+- Improve spacing, typography, button styles, hover animations, and consistency.
+- Make every page look polished and professional.
+
+MOBILE (Phone):
+- Replace the current desktop navigation with a fully functional hamburger menu.
+- Fix the current bug where tapping the hamburger menu freezes the page or shows nothing.
+- The mobile menu must slide in smoothly with a dark overlay.
+- Use the correct z-index so it always appears above the page.
+- Include Home, Browse Projects, Find Talent, Dashboard (when logged in), Messages, Notifications, Profile, Sign In, Get Started, Logout, and any other relevant navigation links.
+- Close the menu when the X button, outside overlay, or any menu item is tapped.
+- Prevent background scrolling only while the menu is open.
+- Ensure all menu items work correctly.
+
+RESPONSIVE DESIGN:
+- Optimize every page for screens from 320px to large desktop monitors.
+- Make sure no text, cards, forms, tables, images, buttons, or dashboards overflow or get cut off.
+- Improve spacing for mobile.
+- Make forms easier to use on phones.
+- Improve touch targets for buttons.
+- Keep the hero section beautiful on every screen size.
+- Ensure dashboards, analytics, projects, profiles, chats, and settings are fully responsive.
+
+UI/UX IMPROVEMENTS:
+- Add smooth animations and transitions.
+- Improve loading states and skeleton loaders where appropriate.
+- Improve empty states and error states.
+- Improve accessibility and readability.
+- Maintain a premium, modern, clean appearance throughout the application.
+
+QUALITY ASSURANCE:
+- Test every page on desktop, tablet, and mobile.
+- Remove all layout bugs.
+- Remove console errors.
+- Remove React, TypeScript, JavaScript, and CSS errors.
+- Ensure every navigation link works.
+- Ensure authentication still works.
+- Ensure all existing features continue working exactly as before.
+
+IMPORTANT:
+Do NOT remove, replace, or break any existing functionality. This task is strictly a UI/UX and responsive improvement while preserving all current features and functionality. Verify everything works before marking the task complete.

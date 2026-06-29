@@ -52,7 +52,7 @@ export default function HomePage() {
   return (
     <div className="bg-white">
       {/* Hero */}
-      <section className="relative overflow-hidden bg-[#0a0a0a] text-white pt-24 pb-32 lg:pt-36 lg:pb-40">
+      <section className="relative overflow-hidden bg-[#0a0a0a] text-white pt-20 pb-24 sm:pt-24 sm:pb-32 lg:pt-36 lg:pb-40">
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150 mix-blend-overlay"></div>
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
         
@@ -67,12 +67,12 @@ export default function HomePage() {
               AI-Powered Talent Matching
             </div>
             
-            <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-[1.1] mb-8">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 sm:mb-8">
               Where Student Talent<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-indigo-300 animate-shimmer bg-[length:200%_auto]">Meets Real Work.</span>
             </h1>
             
-            <p className="text-lg sm:text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-gray-400 mb-8 sm:mb-10 max-w-2xl mx-auto leading-relaxed px-2 sm:px-0">
               The premium marketplace connecting exceptional African students and freelancers with global clients. Ship real projects, build your career.
             </p>
             
@@ -92,15 +92,15 @@ export default function HomePage() {
               </button>
             </form>
             
-            <div className="flex items-center justify-center gap-6 text-sm text-gray-400">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs sm:text-sm text-gray-400">
               <div className="flex items-center gap-2">
-                <CheckCircle size={16} className="text-indigo-400" /> Free to join
+                <CheckCircle size={15} className="text-indigo-400 flex-shrink-0" /> Free to join
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle size={16} className="text-indigo-400" /> Vetted talent
+                <CheckCircle size={15} className="text-indigo-400 flex-shrink-0" /> Vetted talent
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle size={16} className="text-indigo-400" /> Secure escrow
+                <CheckCircle size={15} className="text-indigo-400 flex-shrink-0" /> Secure escrow
               </div>
             </div>
           </div>
@@ -108,15 +108,17 @@ export default function HomePage() {
       </section>
 
       {/* Stats - Elegant bar */}
-      <section className="bg-white border-b border-gray-200 py-10 relative -mt-8 mx-4 sm:mx-8 rounded-2xl shadow-xl z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-gray-100">
-            {STATS.map((stat, i) => (
-              <div key={stat.label} className={cn("text-center", i % 2 !== 0 && "md:border-l md:border-gray-100", i === 0 && "border-none")}>
-                <div className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">{stat.value}</div>
-                <div className="text-sm text-gray-500 font-medium uppercase tracking-wide">{stat.label}</div>
-              </div>
-            ))}
+      <section className="relative z-20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-8">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-xl py-8 px-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-0 md:divide-x md:divide-gray-100">
+              {STATS.map((stat) => (
+                <div key={stat.label} className="text-center px-2">
+                  <div className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight mb-1">{stat.value}</div>
+                  <div className="text-xs sm:text-sm text-gray-500 font-medium uppercase tracking-wide">{stat.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -288,7 +290,7 @@ export default function HomePage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-10 ml-13">
+              <div className="mt-10">
                 <Link href="/register?role=freelancer" className="btn-primary w-full sm:w-auto">Join as Talent</Link>
               </div>
             </div>
@@ -314,7 +316,7 @@ export default function HomePage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-10 ml-13">
+              <div className="mt-10">
                 <Link href="/register?role=client" className="btn-secondary w-full sm:w-auto border-gray-300 hover:border-gray-400">Start Hiring</Link>
               </div>
             </div>
