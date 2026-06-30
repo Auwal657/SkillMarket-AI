@@ -9,6 +9,9 @@ const router = Router();
 const SendMessageBody = z.object({
   recipientId: z.number().int().positive(),
   content: z.string().min(1).max(2000),
+  attachmentUrl: z.string().optional().nullable(),
+  attachmentName: z.string().optional().nullable(),
+  attachmentType: z.string().optional().nullable(),
 });
 
 router.get("/conversations", requireAuth, async (req, res) => {
@@ -91,7 +94,7 @@ router.post("/", requireAuth, async (req, res) => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
 
   const uid = req.user!.userId;
-  const { recipientId, content } = parsed.data;
+  const { recipientId, content, attachmentUrl, attachmentName, attachmentType } = parsed.data;
   if (uid === recipientId) { res.status(400).json({ error: "Cannot message yourself" }); return; }
 
   // Verify recipient exists
@@ -113,13 +116,19 @@ router.post("/", requireAuth, async (req, res) => {
     conversationId: conv.id,
     senderId: uid,
     content,
+    attachmentUrl: attachmentUrl ?? null,
+    attachmentName: attachmentName ?? null,
+    attachmentType: attachmentType ?? null,
   }).returning();
 
   await db.update(conversationsTable).set({ lastMessageAt: new Date() }).where(eq(conversationsTable.id, conv.id));
 
-  // Notify recipient of new message
   const [sender] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, uid));
-  const preview = content.length > 60 ? content.slice(0, 60) + "…" : content;
+  const hasContent = content?.trim();
+  const preview = hasContent
+    ? (content.length > 60 ? content.slice(0, 60) + "…" : content)
+    : `📎 ${attachmentName ?? "file"}`;
+
   await db.insert(notificationsTable).values({
     userId: recipientId,
     type: "new_message",
@@ -128,7 +137,26 @@ router.post("/", requireAuth, async (req, res) => {
     link: `/messages`,
   }).catch(() => {});
 
-  res.status(201).json({ ...message, conversationId: conv.id });
+  const fullMessage = { ...message, conversationId: conv.id };
+
+  // Emit real-time socket events so the recipient gets the message instantly
+  try {
+    const { io } = await import("../lib/socket");
+    if (io) {
+      io.to(`conv:${conv.id}`).emit("message:new", fullMessage);
+      io.to(`user:${uid}`).to(`user:${recipientId}`).emit("conversation:updated", { conversationId: conv.id });
+
+      const [notif] = await db.select().from(notificationsTable)
+        .where(eq(notificationsTable.userId, recipientId))
+        .orderBy(sql`${notificationsTable.createdAt} DESC`)
+        .limit(1);
+      if (notif) io.to(`user:${recipientId}`).emit("notification:new", notif);
+    }
+  } catch {
+    // Socket emission is best-effort; REST response is the source of truth
+  }
+
+  res.status(201).json(fullMessage);
 });
 
 export default router;

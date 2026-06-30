@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearch } from "wouter";
-import { MessageCircle, Send, Paperclip, X, FileText, Image, Search, Circle, MoreVertical, Menu } from "lucide-react";
+import { MessageCircle, Send, Paperclip, X, FileText, Search, Circle, MoreVertical, Menu } from "lucide-react";
 import { io as socketIO, Socket } from "socket.io-client";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import EmptyState from "../components/common/EmptyState";
 import { formatRelativeTime, cn } from "../lib/utils";
 
 interface Conversation {
@@ -25,6 +24,7 @@ interface Message {
   attachmentUrl?: string | null;
   attachmentName?: string | null;
   attachmentType?: string | null;
+  _optimistic?: boolean;
 }
 
 const BASE = "/api";
@@ -36,8 +36,8 @@ function getSocket(): Socket {
       path: "/socket.io",
       withCredentials: true,
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
   }
   return _socket;
@@ -85,7 +85,7 @@ export default function MessagesPage() {
     if (res.ok) { const data = await res.json(); setMessages(data); }
   }, []);
 
-  // Socket.IO setup
+  // Socket.IO setup — stable effect, only re-run on user change
   useEffect(() => {
     if (!user) return;
     const socket = getSocket();
@@ -93,14 +93,20 @@ export default function MessagesPage() {
 
     const onConnect = () => {
       setSocketConnected(true);
-      const ids = conversations.map(c => c.otherUser?.id).filter(Boolean) as number[];
-      if (ids.length > 0) socket.emit("presence:query", ids);
+      // Re-join the active conversation room after reconnect
+      if (activeConvRef.current) {
+        socket.emit("join:conversation", activeConvRef.current);
+      }
     };
     const onDisconnect = () => setSocketConnected(false);
 
     const onNewMessage = (msg: Message) => {
       if (msg.conversationId === activeConvRef.current) {
-        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+        setMessages(prev => {
+          // Remove any optimistic version, then add the confirmed message
+          const without = prev.filter(m => !m._optimistic || m.content !== msg.content || m.senderId !== msg.senderId);
+          return without.some(m => m.id === msg.id) ? without : [...without, msg];
+        });
         socket.emit("conversation:read", msg.conversationId);
         setTypingUsers(prev => { const next = new Set(prev); next.delete(msg.senderId); return next; });
       }
@@ -109,7 +115,7 @@ export default function MessagesPage() {
 
     const onConversationUpdated = () => { fetchConversations(); };
 
-    const onTypingStart = ({ userId }: { userId: number; conversationId: number }) => {
+    const onTypingStart = ({ userId }: { userId: number }) => {
       setTypingUsers(prev => new Set([...prev, userId]));
     };
     const onTypingStop = ({ userId }: { userId: number }) => {
@@ -134,7 +140,11 @@ export default function MessagesPage() {
     socket.on("presence:online", onPresenceOnline);
     socket.on("presence:offline", onPresenceOffline);
     socket.on("presence:status", onPresenceStatus);
-    if (socket.connected) setSocketConnected(true);
+
+    if (socket.connected) {
+      setSocketConnected(true);
+      if (activeConvRef.current) socket.emit("join:conversation", activeConvRef.current);
+    }
 
     return () => {
       socket.off("connect", onConnect);
@@ -147,16 +157,20 @@ export default function MessagesPage() {
       socket.off("presence:offline", onPresenceOffline);
       socket.off("presence:status", onPresenceStatus);
     };
-  }, [user, fetchConversations, conversations]);
+  }, [user, fetchConversations]);
 
-  // Join/leave room
+  // Join/leave conversation room when active conversation changes
   useEffect(() => {
     const socket = socketRef.current;
-    if (!socket || !activeConv) return;
-    socket.emit("join:conversation", activeConv);
-    socket.emit("conversation:read", activeConv);
-    setMobileSidebarOpen(false); // hide sidebar on mobile when opening chat
-    return () => { socket.emit("leave:conversation", activeConv); };
+    if (!activeConv) return;
+    if (socket?.connected) {
+      socket.emit("join:conversation", activeConv);
+      socket.emit("conversation:read", activeConv);
+    }
+    setMobileSidebarOpen(false);
+    return () => {
+      if (socket?.connected) socket.emit("leave:conversation", activeConv);
+    };
   }, [activeConv]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
@@ -167,7 +181,7 @@ export default function MessagesPage() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Polling fallback
+  // Polling fallback when socket is disconnected
   useEffect(() => {
     if (socketConnected) return;
     const convInterval = setInterval(() => fetchConversations(), 10000);
@@ -177,7 +191,7 @@ export default function MessagesPage() {
     return () => { clearInterval(convInterval); clearInterval(msgInterval); };
   }, [socketConnected, fetchConversations, fetchMessages]);
 
-  // Recipient query param handler
+  // Handle ?recipient= param: load recipient info and find/create conversation
   useEffect(() => {
     if (!recipientId || !user) return;
     if (recipientOpened.current === recipientId) return;
@@ -188,12 +202,17 @@ export default function MessagesPage() {
         fetch(`${BASE}/messages/conversations`, { credentials: "include" }),
         fetch(`/api/users/${recipientId}`, { credentials: "include" }),
       ]);
+
       if (convsRes.ok) {
         const convs: Conversation[] = await convsRes.json();
         setConversations(convs);
         const existing = convs.find(c => c.otherUser?.id === parseInt(recipientId));
-        if (existing) { setActiveConv(existing.id); return; }
+        if (existing) {
+          setActiveConv(existing.id);
+          return;
+        }
       }
+
       if (userRes.ok) {
         const u = await userRes.json();
         setRecipientInfo({ id: u.id, name: u.name, avatarUrl: u.avatarUrl ?? null, role: u.role });
@@ -226,7 +245,7 @@ export default function MessagesPage() {
         const data = await res.json();
         setAttachment({ url: data.url, name: data.name, type: data.type });
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         alert(data.error ?? "Upload failed");
       }
     } catch {
@@ -237,78 +256,129 @@ export default function MessagesPage() {
     }
   };
 
-  const emitMessage = (socket: Socket, recipientId: number, content: string) => {
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    socket.emit("message:send", {
-      recipientId,
-      content,
-      ...(attachment ? { attachmentUrl: attachment.url, attachmentName: attachment.name, attachmentType: attachment.type } : {}),
+  // Core send function — always uses REST for reliability, emits typing stop via socket
+  const sendMessage = async (toRecipientId: number, content: string): Promise<{ message: Message; conversationId: number } | null> => {
+    const body: Record<string, unknown> = { recipientId: toRecipientId, content };
+    if (attachment) {
+      body.attachmentUrl = attachment.url;
+      body.attachmentName = attachment.name;
+      body.attachmentType = attachment.type;
+    }
+
+    const res = await fetch(`${BASE}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
     });
-    setNewMsg("");
-    setAttachment(null);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error ?? "Failed to send message");
+      return null;
+    }
+
+    const msg: Message = await res.json();
+
+    // Stop typing indicator via socket
+    const socket = socketRef.current;
+    if (socket?.connected && msg.conversationId) {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      socket.emit("typing:stop", { conversationId: msg.conversationId });
+    }
+
+    return { message: msg, conversationId: msg.conversationId! };
   };
 
+  // Send within an existing conversation
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMsg.trim() && !attachment) return;
     if (!activeConv) return;
+
+    const conv = conversations.find(c => c.id === activeConv);
+    const otherId = conv?.otherUser?.id ?? recipientInfo?.id;
+    if (!otherId) return;
+
     const content = newMsg.trim();
+
+    // Optimistic update — show message immediately
+    const optimisticMsg: Message = {
+      id: Date.now(),
+      senderId: user!.id,
+      content,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      conversationId: activeConv,
+      attachmentUrl: attachment?.url ?? null,
+      attachmentName: attachment?.name ?? null,
+      attachmentType: attachment?.type ?? null,
+      _optimistic: true,
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setNewMsg("");
+    setAttachment(null);
+
     setSending(true);
     try {
-      const conv = conversations.find(c => c.id === activeConv);
-      const otherId = conv?.otherUser?.id;
-      if (!otherId) return;
-
-      const socket = socketRef.current;
-      if (socket?.connected) {
-        emitMessage(socket, otherId, content);
+      const result = await sendMessage(otherId, content);
+      if (result) {
+        // Replace optimistic message with confirmed one
+        setMessages(prev => prev.map(m => m._optimistic && m.id === optimisticMsg.id ? { ...result.message } : m));
+        fetchConversations();
       } else {
-        await fetch(`${BASE}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ recipientId: otherId, content }),
-        });
-        setNewMsg("");
-        setAttachment(null);
-        await fetchMessages(activeConv);
-        await fetchConversations();
+        // Rollback optimistic message on failure
+        setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
+        setNewMsg(content);
       }
     } finally {
       setSending(false);
     }
   };
 
+  // Send the first message to a new recipient (no existing conversation yet)
   const handleSendToNewRecipient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMsg.trim() && !attachment) return;
     if (!recipientId) return;
+
     const content = newMsg.trim();
+    const toId = parseInt(recipientId, 10);
+
+    // Optimistic update — show message immediately in the chat area
+    const optimisticMsg: Message = {
+      id: Date.now(),
+      senderId: user!.id,
+      content,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      _optimistic: true,
+      attachmentUrl: attachment?.url ?? null,
+      attachmentName: attachment?.name ?? null,
+      attachmentType: attachment?.type ?? null,
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setNewMsg("");
+    setAttachment(null);
+
     setSending(true);
     try {
-      const socket = socketRef.current;
-      if (socket?.connected) {
-        emitMessage(socket, parseInt(recipientId), content);
-        setTimeout(async () => {
-          await fetchConversations();
-          const convs: Conversation[] = await fetch(`${BASE}/messages/conversations`, { credentials: "include" }).then(r => r.json()).catch(() => []);
-          const created = convs.find((c: Conversation) => c.otherUser?.id === parseInt(recipientId));
-          if (created) setActiveConv(created.id);
-        }, 600);
+      const result = await sendMessage(toId, content);
+      if (result) {
+        const { conversationId } = result;
+        // Switch to the real conversation — this triggers fetchMessages and socket join
+        setActiveConv(conversationId);
+        setRecipientInfo(null);
+        // Replace optimistic message with confirmed one
+        setMessages(prev => prev.map(m => m._optimistic && m.id === optimisticMsg.id ? { ...result.message } : m));
+        await fetchConversations();
+        // Make sure the socket joins the new conversation
+        const socket = socketRef.current;
+        if (socket?.connected) socket.emit("join:conversation", conversationId);
       } else {
-        const res = await fetch(`${BASE}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ recipientId: parseInt(recipientId), content }),
-        });
-        if (res.ok) {
-          const msg = await res.json();
-          setNewMsg("");
-          setAttachment(null);
-          await fetchConversations();
-          setActiveConv(msg.conversationId);
-        }
+        // Rollback
+        setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
+        setNewMsg(content);
       }
     } finally {
       setSending(false);
@@ -317,20 +387,20 @@ export default function MessagesPage() {
 
   if (loading) return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="xl" /></div>;
 
-  const filteredConversations = conversations.filter(c => 
+  const filteredConversations = conversations.filter(c =>
     c.otherUser?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const activeConvData = conversations.find(c => c.id === activeConv);
-  const isNewRecipient = recipientId && !activeConv && !conversations.find(c => c.otherUser?.id === parseInt(recipientId));
+  const isNewRecipient = !!(recipientId && !activeConv && !conversations.find(c => c.otherUser?.id === parseInt(recipientId)));
   const activeOtherUser = activeConvData?.otherUser ?? recipientInfo;
-  const isOtherUserTyping = activeOtherUser && typingUsers.has(activeOtherUser.id);
+  const isOtherUserTyping = !!(activeOtherUser && typingUsers.has(activeOtherUser.id));
   const canSend = !sending && (newMsg.trim().length > 0 || !!attachment);
 
   const renderAttachment = (msg: Message, isMe: boolean) => {
     if (!msg.attachmentUrl) return null;
     const isImage = msg.attachmentType?.startsWith("image/");
-    
+
     if (isImage) {
       return (
         <div className="mt-2 rounded-xl overflow-hidden shadow-sm border border-black/5 bg-black/5">
@@ -365,7 +435,7 @@ export default function MessagesPage() {
           </button>
         </div>
       )}
-      
+
       <div className="flex items-end gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-200 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
         <input
           ref={fileInputRef}
@@ -383,7 +453,7 @@ export default function MessagesPage() {
         >
           {uploading ? <span className="w-5 h-5 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin block" /> : <Paperclip size={20} />}
         </button>
-        
+
         <textarea
           value={newMsg}
           onChange={e => handleTyping(e.target.value)}
@@ -397,11 +467,11 @@ export default function MessagesPage() {
           placeholder={placeholder}
           rows={1}
         />
-        
-        <button 
-          type="submit" 
-          disabled={!canSend} 
-          className={cn("p-3 rounded-xl flex-shrink-0 transition-all shadow-sm", 
+
+        <button
+          type="submit"
+          disabled={!canSend}
+          className={cn("p-3 rounded-xl flex-shrink-0 transition-all shadow-sm",
             canSend ? "bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow" : "bg-gray-200 text-gray-400")}
         >
           <Send size={20} className={cn(canSend && "translate-x-0.5 -translate-y-0.5 transition-transform")} />
@@ -412,13 +482,13 @@ export default function MessagesPage() {
 
   return (
     <div className="h-[calc(100vh-64px)] max-w-[1600px] mx-auto flex flex-col pt-4 pb-6 px-4 sm:px-6 animate-fade-in">
-      
+
       <div className="card flex-1 flex overflow-hidden shadow-xl border-gray-200">
-        
+
         {/* Sidebar */}
         <div className={cn(
           "flex flex-col w-full md:w-80 lg:w-96 border-r border-gray-100 bg-white flex-shrink-0 transition-transform duration-300",
-          !mobileSidebarOpen && activeConv ? "hidden md:flex" : "flex"
+          !mobileSidebarOpen && (activeConv || isNewRecipient) ? "hidden md:flex" : "flex"
         )}>
           {/* Sidebar Header */}
           <div className="p-5 border-b border-gray-100">
@@ -426,12 +496,12 @@ export default function MessagesPage() {
               <h2 className="text-xl font-bold text-gray-900">Messages</h2>
               <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">{conversations.length}</span>
             </div>
-            
+
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search conversations..." 
+              <input
+                type="text"
+                placeholder="Search conversations..."
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -447,16 +517,16 @@ export default function MessagesPage() {
                   <MessageCircle size={24} className="text-gray-300" />
                 </div>
                 <p className="text-gray-900 font-medium text-sm">No conversations</p>
-                <p className="text-xs text-gray-500 mt-1">{searchQuery ? "No matches found" : "Start chatting with freelancers"}</p>
+                <p className="text-xs text-gray-500 mt-1">{searchQuery ? "No matches found" : "Start chatting from a freelancer's profile"}</p>
               </div>
             ) : filteredConversations.map(conv => {
               const isOnline = conv.otherUser ? onlineUsers.has(conv.otherUser.id) : false;
               const isActive = activeConv === conv.id;
               const hasUnread = conv.unreadCount > 0;
-              
+
               return (
-                <button 
-                  key={conv.id} 
+                <button
+                  key={conv.id}
                   onClick={() => setActiveConv(conv.id)}
                   className={cn(
                     "w-full flex items-center gap-3 p-3 rounded-2xl transition-all text-left group",
@@ -471,7 +541,7 @@ export default function MessagesPage() {
                       isOnline ? "bg-green-500" : "bg-gray-300"
                     )} />
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <p className={cn("font-semibold text-sm truncate", isActive ? "text-white" : "text-gray-900")}>
@@ -484,7 +554,7 @@ export default function MessagesPage() {
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className={cn("text-xs truncate flex-1", 
+                      <p className={cn("text-xs truncate flex-1",
                         isActive ? "text-indigo-100" : (hasUnread ? "text-gray-900 font-medium" : "text-gray-500")
                       )}>
                         {conv.lastMessage?.attachmentName && !conv.lastMessage.content ? "📎 Attachment" : conv.lastMessage?.content ?? "No messages yet"}
@@ -512,13 +582,13 @@ export default function MessagesPage() {
               {/* Chat Header */}
               <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => setMobileSidebarOpen(true)}
+                  <button
+                    onClick={() => { setMobileSidebarOpen(true); }}
                     className="md:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg"
                   >
                     <Menu size={20} />
                   </button>
-                  
+
                   {activeOtherUser ? (
                     <div className="flex items-center gap-3">
                       <Avatar name={activeOtherUser.name} avatarUrl={activeOtherUser.avatarUrl} size="md" />
@@ -539,11 +609,11 @@ export default function MessagesPage() {
                   ) : (
                     <div>
                       <p className="font-bold text-gray-900 text-base">New Conversation</p>
-                      <p className="text-xs text-gray-500">Connecting...</p>
+                      <p className="text-xs text-gray-500">Loading...</p>
                     </div>
                   )}
                 </div>
-                
+
                 <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors">
                   <MoreVertical size={20} />
                 </button>
@@ -551,7 +621,7 @@ export default function MessagesPage() {
 
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {!activeConv && isNewRecipient && (
+                {!activeConv && isNewRecipient && messages.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <Avatar name={activeOtherUser?.name ?? "?"} avatarUrl={activeOtherUser?.avatarUrl} size="xl" />
                     <h3 className="mt-4 text-xl font-bold text-gray-900">{activeOtherUser?.name}</h3>
@@ -559,7 +629,6 @@ export default function MessagesPage() {
                   </div>
                 )}
 
-                {/* Date separator (mocked logic for visual) */}
                 {messages.length > 0 && (
                   <div className="flex justify-center pt-2 pb-4">
                     <span className="bg-white border border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-sm">
@@ -571,7 +640,7 @@ export default function MessagesPage() {
                 {messages.map((msg, i) => {
                   const isMe = msg.senderId === user?.id;
                   const showAvatar = !isMe && (i === messages.length - 1 || messages[i + 1]?.senderId !== msg.senderId);
-                  
+
                   return (
                     <div key={msg.id} className={cn("flex gap-3", isMe ? "justify-end" : "justify-start")}>
                       {!isMe && (
@@ -579,23 +648,24 @@ export default function MessagesPage() {
                           {showAvatar && <Avatar name={activeOtherUser?.name ?? "?"} avatarUrl={activeOtherUser?.avatarUrl} size="sm" />}
                         </div>
                       )}
-                      
+
                       <div className={cn("flex flex-col max-w-[75%] md:max-w-[65%]", isMe ? "items-end" : "items-start")}>
                         <div className={cn(
                           "px-5 py-3 text-[15px] shadow-sm",
-                          isMe 
-                            ? "bg-indigo-600 text-white rounded-2xl rounded-br-sm" 
-                            : "bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm"
+                          isMe
+                            ? "bg-indigo-600 text-white rounded-2xl rounded-br-sm"
+                            : "bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm",
+                          msg._optimistic && "opacity-70"
                         )}>
                           {msg.content && <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>}
                           {renderAttachment(msg, isMe)}
                         </div>
-                        
+
                         <div className="flex items-center gap-1.5 mt-1.5 px-1">
                           <span className="text-[11px] font-medium text-gray-400">
-                            {formatRelativeTime(msg.createdAt)}
+                            {msg._optimistic ? "Sending..." : formatRelativeTime(msg.createdAt)}
                           </span>
-                          {isMe && (
+                          {isMe && !msg._optimistic && (
                             <span className={cn("text-[10px] font-bold", msg.isRead ? "text-indigo-500" : "text-gray-300")}>
                               {msg.isRead ? "✓✓" : "✓"}
                             </span>
@@ -622,7 +692,7 @@ export default function MessagesPage() {
                 <div ref={messagesEndRef} className="h-4" />
               </div>
 
-              {activeConv
+              {activeConv || !isNewRecipient
                 ? inputForm(handleSend, "Message...")
                 : inputForm(handleSendToNewRecipient, "Say hello...")}
             </>
