@@ -1,16 +1,16 @@
 import { Router } from "express";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, inArray } from "drizzle-orm";
 import {
   db, usersTable, projectsTable, applicationsTable,
   freelancerProfilesTable, reviewsTable,
   escrowTransactionsTable, walletTransactionsTable, withdrawalRequestsTable, walletsTable,
+  reportsTable,
 } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
 
-// Admin guard middleware
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.user) { res.status(401).json({ error: "Not authenticated" }); return; }
   (async () => {
@@ -23,7 +23,6 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   })().catch(next);
 }
 
-// GET /api/admin/stats — overview numbers
 router.get("/stats", requireAuth, requireAdmin, async (_req, res) => {
   const [[users], [projects], [applications], [reviews]] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(usersTable),
@@ -32,17 +31,13 @@ router.get("/stats", requireAuth, requireAdmin, async (_req, res) => {
     db.select({ count: sql<number>`count(*)` }).from(reviewsTable),
   ]);
 
-  const [projectsByStatus] = await Promise.all([
-    db.select({ status: projectsTable.status, count: sql<number>`count(*)` })
-      .from(projectsTable)
-      .groupBy(projectsTable.status),
-  ]);
+  const projectsByStatus = await db.select({ status: projectsTable.status, count: sql<number>`count(*)` })
+    .from(projectsTable)
+    .groupBy(projectsTable.status);
 
-  const [usersByRole] = await Promise.all([
-    db.select({ role: usersTable.role, count: sql<number>`count(*)` })
-      .from(usersTable)
-      .groupBy(usersTable.role),
-  ]);
+  const usersByRole = await db.select({ role: usersTable.role, count: sql<number>`count(*)` })
+    .from(usersTable)
+    .groupBy(usersTable.role);
 
   res.json({
     totalUsers: Number(users?.count ?? 0),
@@ -54,10 +49,10 @@ router.get("/stats", requireAuth, requireAdmin, async (_req, res) => {
   });
 });
 
-// GET /api/admin/users — list all users
 router.get("/users", requireAuth, requireAdmin, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
   const offset = parseInt(req.query.offset as string || "0", 10);
+  const search = (req.query.search as string || "").toLowerCase();
 
   const users = await db
     .select({
@@ -67,6 +62,9 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
       role: usersTable.role,
       university: usersTable.university,
       isAdmin: usersTable.isAdmin,
+      isSuspended: usersTable.isSuspended,
+      isBanned: usersTable.isBanned,
+      emailVerified: usersTable.emailVerified,
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)
@@ -74,38 +72,59 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
     .limit(limit)
     .offset(offset);
 
-  res.json(users);
+  const filtered = search
+    ? users.filter(u => u.name.toLowerCase().includes(search) || u.email.toLowerCase().includes(search))
+    : users;
+
+  res.json(filtered);
 });
 
-// PATCH /api/admin/users/:id — update user (toggle admin, etc.)
 router.patch("/users/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { isAdmin } = req.body as { isAdmin?: boolean };
-  if (isAdmin === undefined) { res.status(400).json({ error: "Nothing to update" }); return; }
+  const { isAdmin, isSuspended, isBanned, emailVerified } = req.body as {
+    isAdmin?: boolean;
+    isSuspended?: boolean;
+    isBanned?: boolean;
+    emailVerified?: boolean;
+  };
+
+  const updates: Record<string, unknown> = {};
+  if (isAdmin !== undefined) updates.isAdmin = isAdmin;
+  if (isSuspended !== undefined) updates.isSuspended = isSuspended;
+  if (isBanned !== undefined) updates.isBanned = isBanned;
+  if (emailVerified !== undefined) updates.emailVerified = emailVerified;
+
+  if (Object.keys(updates).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
 
   const [updated] = await db
     .update(usersTable)
-    .set({ isAdmin })
+    .set(updates)
     .where(eq(usersTable.id, id))
-    .returning({ id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role, isAdmin: usersTable.isAdmin });
+    .returning({
+      id: usersTable.id,
+      email: usersTable.email,
+      name: usersTable.name,
+      role: usersTable.role,
+      isAdmin: usersTable.isAdmin,
+      isSuspended: usersTable.isSuspended,
+      isBanned: usersTable.isBanned,
+      emailVerified: usersTable.emailVerified,
+    });
 
   if (!updated) { res.status(404).json({ error: "User not found" }); return; }
   res.json(updated);
 });
 
-// DELETE /api/admin/users/:id
 router.delete("/users/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   if (id === req.user!.userId) { res.status(400).json({ error: "Cannot delete yourself" }); return; }
-
   await db.delete(usersTable).where(eq(usersTable.id, id));
   res.json({ message: "User deleted" });
 });
 
-// GET /api/admin/projects — list all projects
 router.get("/projects", requireAuth, requireAdmin, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
   const offset = parseInt(req.query.offset as string || "0", 10);
@@ -129,7 +148,6 @@ router.get("/projects", requireAuth, requireAdmin, async (req, res) => {
   res.json(projects);
 });
 
-// DELETE /api/admin/projects/:id
 router.delete("/projects/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -137,48 +155,118 @@ router.delete("/projects/:id", requireAuth, requireAdmin, async (req, res) => {
   res.json({ message: "Project deleted" });
 });
 
-// GET /api/admin/reports — aggregate report data
-router.get("/reports", requireAuth, requireAdmin, async (_req, res) => {
-  const [recentProjects, recentUsers, topFreelancers] = await Promise.all([
-    db.select({
-      id: projectsTable.id,
-      title: projectsTable.title,
-      status: projectsTable.status,
-      category: projectsTable.category,
-      createdAt: projectsTable.createdAt,
-    })
-      .from(projectsTable)
-      .orderBy(desc(projectsTable.createdAt))
-      .limit(10),
+router.get("/freelancers", requireAuth, requireAdmin, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+  const offset = parseInt(req.query.offset as string || "0", 10);
 
-    db.select({
-      id: usersTable.id,
-      name: usersTable.name,
-      email: usersTable.email,
-      role: usersTable.role,
-      createdAt: usersTable.createdAt,
-    })
-      .from(usersTable)
-      .orderBy(desc(usersTable.createdAt))
-      .limit(10),
-
-    db.select({
+  const profiles = await db
+    .select({
       id: freelancerProfilesTable.id,
       userId: freelancerProfilesTable.userId,
+      headline: freelancerProfilesTable.headline,
+      hourlyRate: freelancerProfilesTable.hourlyRate,
       averageRating: freelancerProfilesTable.averageRating,
-      totalReviews: freelancerProfilesTable.totalReviews,
       completedProjects: freelancerProfilesTable.completedProjects,
       totalEarnings: freelancerProfilesTable.totalEarnings,
+      isVerified: freelancerProfilesTable.isVerified,
+      createdAt: freelancerProfilesTable.createdAt,
     })
-      .from(freelancerProfilesTable)
-      .orderBy(desc(freelancerProfilesTable.completedProjects))
-      .limit(10),
-  ]);
+    .from(freelancerProfilesTable)
+    .orderBy(desc(freelancerProfilesTable.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-  res.json({ recentProjects, recentUsers, topFreelancers });
+  if (profiles.length === 0) { res.json([]); return; }
+
+  const userIds = profiles.map(p => p.userId);
+  const users = await db
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, avatarUrl: usersTable.avatarUrl })
+    .from(usersTable)
+    .where(inArray(usersTable.id, userIds));
+
+  const userMap = new Map(users.map(u => [u.id, u]));
+
+  res.json(profiles.map(p => ({
+    ...p,
+    user: userMap.get(p.userId) ?? null,
+  })));
 });
 
-// GET /api/admin/me — check if current user is admin
+router.patch("/freelancers/:id/verify", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { isVerified } = req.body as { isVerified: boolean };
+  if (typeof isVerified !== "boolean") { res.status(400).json({ error: "isVerified must be boolean" }); return; }
+
+  const [updated] = await db
+    .update(freelancerProfilesTable)
+    .set({ isVerified })
+    .where(eq(freelancerProfilesTable.id, id))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Freelancer profile not found" }); return; }
+  res.json(updated);
+});
+
+router.get("/reports", requireAuth, requireAdmin, async (req, res) => {
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
+  const offset = parseInt(req.query.offset as string || "0", 10);
+
+  let query = db
+    .select({
+      report: reportsTable,
+      reporterName: usersTable.name,
+    })
+    .from(reportsTable)
+    .innerJoin(usersTable, eq(reportsTable.reporterId, usersTable.id))
+    .$dynamic();
+
+  if (status && ["pending", "reviewed", "resolved", "dismissed"].includes(status)) {
+    query = query.where(eq(reportsTable.status, status as "pending" | "reviewed" | "resolved" | "dismissed"));
+  }
+
+  const reports = await query
+    .orderBy(desc(reportsTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  res.json(reports.map(({ report, reporterName }) => ({ ...report, reporterName })));
+});
+
+router.patch("/reports/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { status, adminNote } = req.body as { status?: string; adminNote?: string };
+  const updates: Record<string, unknown> = {};
+  if (status && ["reviewed", "resolved", "dismissed"].includes(status)) {
+    updates.status = status;
+    if (status === "resolved" || status === "dismissed") updates.resolvedAt = new Date();
+  }
+  if (adminNote !== undefined) updates.adminNote = adminNote;
+
+  if (Object.keys(updates).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
+
+  const [updated] = await db
+    .update(reportsTable)
+    .set(updates)
+    .where(eq(reportsTable.id, id))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Report not found" }); return; }
+  res.json(updated);
+});
+
+router.get("/reports/summary", requireAuth, requireAdmin, async (_req, res) => {
+  const counts = await db
+    .select({ status: reportsTable.status, count: sql<number>`count(*)` })
+    .from(reportsTable)
+    .groupBy(reportsTable.status);
+  res.json(counts);
+});
+
 router.get("/me", requireAuth, async (req, res) => {
   const [user] = await db
     .select({ isAdmin: usersTable.isAdmin })
@@ -187,7 +275,6 @@ router.get("/me", requireAuth, async (req, res) => {
   res.json({ isAdmin: user?.isAdmin ?? false });
 });
 
-// GET /api/admin/payments/escrow — all escrow transactions
 router.get("/payments/escrow", requireAuth, requireAdmin, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
   const offset = parseInt(req.query.offset as string || "0", 10);
@@ -224,7 +311,6 @@ router.get("/payments/escrow", requireAuth, requireAdmin, async (req, res) => {
   res.json(enriched);
 });
 
-// GET /api/admin/payments/transactions — all wallet transactions
 router.get("/payments/transactions", requireAuth, requireAdmin, async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
   const offset = parseInt(req.query.offset as string || "0", 10);
@@ -237,8 +323,7 @@ router.get("/payments/transactions", requireAuth, requireAdmin, async (req, res)
   res.json(txns);
 });
 
-// GET /api/admin/payments/withdrawals — all withdrawal requests
-router.get("/payments/withdrawals", requireAuth, requireAdmin, async (req, res) => {
+router.get("/payments/withdrawals", requireAuth, requireAdmin, async (_req, res) => {
   const requests = await db.select().from(withdrawalRequestsTable)
     .orderBy(desc(withdrawalRequestsTable.createdAt))
     .limit(200);
@@ -258,7 +343,6 @@ router.get("/payments/withdrawals", requireAuth, requireAdmin, async (req, res) 
   res.json(enriched);
 });
 
-// PATCH /api/admin/payments/withdrawals/:id — approve, reject or complete a withdrawal
 router.patch("/payments/withdrawals/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -274,7 +358,6 @@ router.patch("/payments/withdrawals/:id", requireAuth, requireAdmin, async (req,
     res.status(400).json({ error: "Cannot update a completed or rejected request" }); return;
   }
 
-  // If rejecting, refund the held amount back to wallet
   if (status === "rejected") {
     const [wallet] = await db.select().from(walletsTable).where(eq(walletsTable.id, wr.walletId));
     if (wallet) {

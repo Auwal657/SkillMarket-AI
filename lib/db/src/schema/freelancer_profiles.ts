@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, real, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, real, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -17,6 +17,7 @@ export const freelancerProfilesTable = pgTable("freelancer_profiles", {
   averageRating: real("average_rating"),
   totalReviews: integer("total_reviews").notNull().default(0),
   profileViews: integer("profile_views").notNull().default(0),
+  isVerified: boolean("is_verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

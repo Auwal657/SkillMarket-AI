@@ -13,6 +13,8 @@ export const usersTable = pgTable("users", {
   university: text("university"),
   avatarUrl: text("avatar_url"),
   isAdmin: boolean("is_admin").notNull().default(false),
+  isSuspended: boolean("is_suspended").notNull().default(false),
+  isBanned: boolean("is_banned").notNull().default(false),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
   emailVerificationSentAt: timestamp("email_verification_sent_at", { withTimezone: true }),

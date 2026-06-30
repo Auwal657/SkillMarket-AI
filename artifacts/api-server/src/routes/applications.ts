@@ -5,7 +5,7 @@ import {
   freelancerProfilesTable, notificationsTable,
 } from "@workspace/db";
 import { ApplyToProjectBody, UpdateApplicationStatusBody } from "@workspace/api-zod";
-import { requireAuth, requireRole, requireEmailVerified } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 
 const router = Router();
 
@@ -33,7 +33,7 @@ router.get("/my", requireAuth, requireRole("freelancer"), async (req, res) => {
   res.json(await attachProjectTitles(applications));
 });
 
-router.post("/", requireAuth, requireEmailVerified, requireRole("freelancer"), async (req, res) => {
+router.post("/", requireAuth, requireRole("freelancer"), async (req, res) => {
   const parsed = ApplyToProjectBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
 

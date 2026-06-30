@@ -5,7 +5,7 @@ import {
   walletsTable, walletTransactionsTable,
   withdrawalRequestsTable, invoicesTable, escrowTransactionsTable,
 } from "@workspace/db";
-import { requireAuth, requireEmailVerified } from "../lib/auth";
+import { requireAuth } from "../lib/auth";
 import { z } from "zod";
 
 const router = Router();
@@ -73,7 +73,7 @@ const WithdrawBody = z.object({
 });
 
 // POST /api/wallet/withdraw — freelancer requests withdrawal
-router.post("/withdraw", requireAuth, requireEmailVerified, async (req, res) => {
+router.post("/withdraw", requireAuth, async (req, res) => {
   const parsed = WithdrawBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
 

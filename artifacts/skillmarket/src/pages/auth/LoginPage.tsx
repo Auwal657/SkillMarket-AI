@@ -115,11 +115,15 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between bg-white px-3 py-2 rounded border border-gray-100">
                 <span className="text-gray-500">Freelancer</span>
-                <div className="font-mono text-xs">freelancer@demo.com / demo123</div>
+                <div className="font-mono text-xs">alex@demo.com / demo1234</div>
               </div>
               <div className="flex items-center justify-between bg-white px-3 py-2 rounded border border-gray-100">
                 <span className="text-gray-500">Client</span>
-                <div className="font-mono text-xs">client@demo.com / demo123</div>
+                <div className="font-mono text-xs">client1@demo.com / demo1234</div>
+              </div>
+              <div className="flex items-center justify-between bg-white px-3 py-2 rounded border border-gray-100">
+                <span className="text-gray-500">Admin</span>
+                <div className="font-mono text-xs">alex@demo.com / demo1234</div>
               </div>
             </div>
           </div>

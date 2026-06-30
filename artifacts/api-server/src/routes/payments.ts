@@ -5,7 +5,7 @@ import {
   walletsTable, escrowTransactionsTable, walletTransactionsTable,
   invoicesTable, notificationsTable,
 } from "@workspace/db";
-import { requireAuth, requireRole, requireEmailVerified } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import {
   initializePayment, verifyPayment, initiateRefund,
   generateReference, generateInvoiceNumber, paystackEnabled,
@@ -62,7 +62,7 @@ async function recordWalletTransaction(opts: {
 }
 
 // POST /api/payments/initialize — client starts escrow payment for a project
-router.post("/initialize", requireAuth, requireEmailVerified, requireRole("client"), async (req, res) => {
+router.post("/initialize", requireAuth, requireRole("client"), async (req, res) => {
   const { projectId } = req.body as { projectId?: number };
   if (!projectId || isNaN(Number(projectId))) {
     res.status(400).json({ error: "projectId is required" }); return;

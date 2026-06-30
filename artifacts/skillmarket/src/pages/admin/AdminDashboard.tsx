@@ -1,49 +1,42 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import {
-  Users, FolderOpen, FileText, Star, Trash2, Shield, ShieldOff,
-  BarChart2, Clock, CheckCircle, XCircle, RefreshCw, Wallet,
-  TrendingUp, DollarSign, UserCheck, UserPlus, Activity,
+  Users, FolderOpen, Wallet, TrendingUp, DollarSign, UserCheck,
+  UserPlus, Activity, CheckCircle, RefreshCw, Trash2,
+  Shield, ShieldOff, ShieldAlert, BarChart2, BadgeCheck, Clock,
+  AlertTriangle, Eye, Ban, Search,
 } from "lucide-react";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import Avatar from "../../components/common/Avatar";
 import MiniChart from "../../components/common/MiniChart";
-import { formatDate, formatCurrency, getStatusColor, cn } from "../../lib/utils";
+import { formatDate, formatCurrency, cn } from "../../lib/utils";
 
-interface Stats {
-  totalUsers: number;
-  totalProjects: number;
-  totalApplications: number;
-  totalReviews: number;
-  projectsByStatus: { status: string; count: number }[];
-  usersByRole: { role: string; count: number }[];
-}
+type Tab = "analytics" | "users" | "freelancers" | "projects" | "reports" | "payments";
 
-interface AdminAnalytics {
-  totalUsers: number;
-  totalFreelancers: number;
-  totalClients: number;
-  totalProjects: number;
-  openProjects: number;
-  activeProjects: number;
-  completedProjects: number;
-  cancelledProjects: number;
-  platformRevenue: number;
-  monthlyRegistrations: { month: string; value: number }[];
-  monthlyRevenue: { month: string; value: number }[];
-  recentUsers: { id: number; name: string; email: string; role: string; createdAt: string }[];
-  recentPayments: { id: number; projectId: number; amount: string; status: string; createdAt: string }[];
-  topFreelancers: { id: number; userId: number; name: string; totalEarnings: number; completedProjects: number; averageRating: number | null }[];
-}
-
-interface User {
+interface AdminUser {
   id: number;
   email: string;
   name: string;
   role: string;
   university?: string | null;
   isAdmin: boolean;
+  isSuspended: boolean;
+  isBanned: boolean;
+  emailVerified: boolean;
   createdAt: string;
+}
+
+interface FreelancerProfile {
+  id: number;
+  userId: number;
+  headline: string;
+  hourlyRate: number;
+  averageRating: number | null;
+  completedProjects: number;
+  totalEarnings: number;
+  isVerified: boolean;
+  createdAt: string;
+  user: { id: number; name: string; email: string; avatarUrl?: string | null } | null;
 }
 
 interface Project {
@@ -57,6 +50,20 @@ interface Project {
   createdAt: string;
 }
 
+interface Report {
+  id: number;
+  reporterId: number;
+  reporterName: string;
+  targetType: "user" | "project" | "message";
+  targetId: number;
+  reason: string;
+  description: string | null;
+  status: "pending" | "reviewed" | "resolved" | "dismissed";
+  adminNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
 interface EscrowTx {
   id: number;
   projectId: number;
@@ -67,10 +74,9 @@ interface EscrowTx {
   status: string;
   createdAt: string;
   fundedAt: string | null;
-  releasedAt: string | null;
 }
 
-interface AdminWithdrawal {
+interface Withdrawal {
   id: number;
   userId: number;
   userName: string | null;
@@ -83,12 +89,24 @@ interface AdminWithdrawal {
   note: string | null;
   adminNote: string | null;
   createdAt: string;
-  processedAt: string | null;
 }
 
-type Tab = "analytics" | "overview" | "users" | "projects" | "payments";
+interface Analytics {
+  totalUsers: number;
+  totalFreelancers: number;
+  totalClients: number;
+  totalProjects: number;
+  openProjects: number;
+  activeProjects: number;
+  completedProjects: number;
+  platformRevenue: number;
+  monthlyRegistrations: { month: string; value: number }[];
+  monthlyRevenue: { month: string; value: number }[];
+  recentUsers: { id: number; name: string; email: string; role: string; createdAt: string }[];
+  topFreelancers: { id: number; userId: number; name: string; totalEarnings: number; completedProjects: number; averageRating: number | null }[];
+}
 
-function StatCard({ icon: Icon, label, value, sub, color }: { icon: React.ElementType; label: string; value: string | number; sub?: string; color: string }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
   return (
     <div className="card p-5">
       <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3", color)}>
@@ -96,23 +114,52 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: React.Elemen
       </div>
       <p className="text-2xl font-bold text-gray-900">{typeof value === "number" ? value.toLocaleString() : value}</p>
       <p className="text-sm text-gray-500 mt-0.5">{label}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-800",
+    reviewed: "bg-blue-100 text-blue-800",
+    resolved: "bg-green-100 text-green-800",
+    dismissed: "bg-gray-100 text-gray-500",
+    open: "bg-indigo-100 text-indigo-700",
+    in_progress: "bg-blue-100 text-blue-700",
+    completed: "bg-green-100 text-green-700",
+    cancelled: "bg-red-100 text-red-700",
+    in_escrow: "bg-indigo-100 text-indigo-700",
+    released: "bg-green-100 text-green-700",
+    refunded: "bg-orange-100 text-orange-700",
+    funded: "bg-blue-100 text-blue-700",
+    approved: "bg-blue-100 text-blue-700",
+    rejected: "bg-red-100 text-red-700",
+    freelancer: "bg-green-100 text-green-700",
+    client: "bg-blue-100 text-blue-700",
+  };
+  return (
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize", map[status] ?? "bg-gray-100 text-gray-600")}>
+      {status.replace(/_/g, " ")}
+    </span>
   );
 }
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("analytics");
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [escrows, setEscrows] = useState<EscrowTx[]>([]);
-  const [withdrawals, setWithdrawals] = useState<AdminWithdrawal[]>([]);
-  const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [reportFilter, setReportFilter] = useState("pending");
+
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [freelancers, setFreelancers] = useState<FreelancerProfile[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [escrows, setEscrows] = useState<EscrowTx[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
 
   useEffect(() => {
     fetch("/api/admin/me", { credentials: "include" })
@@ -121,94 +168,60 @@ export default function AdminDashboard() {
       .catch(() => setIsAdmin(false));
   }, []);
 
-  const loadAnalytics = async () => {
+  const loadData = useCallback(async (t: Tab) => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/analytics/admin", { credentials: "include" });
-      if (!res.ok) { setError("Failed to load analytics"); return; }
-      setAnalytics(await res.json());
-    } catch { setError("Network error"); } finally { setLoading(false); }
-  };
-
-  const loadStats = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/stats", { credentials: "include" });
-      if (!res.ok) { setError("Failed to load stats"); return; }
-      setStats(await res.json());
-    } catch { setError("Network error"); } finally { setLoading(false); }
-  };
-
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/users?limit=100", { credentials: "include" });
-      if (!res.ok) { setError("Failed to load users"); return; }
-      setUsers(await res.json());
-    } catch { setError("Network error"); } finally { setLoading(false); }
-  };
-
-  const loadProjects = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/projects?limit=100", { credentials: "include" });
-      if (!res.ok) { setError("Failed to load projects"); return; }
-      setProjects(await res.json());
-    } catch { setError("Network error"); } finally { setLoading(false); }
-  };
-
-  const loadPayments = async () => {
-    setLoading(true);
-    try {
-      const [eRes, wRes] = await Promise.all([
-        fetch("/api/admin/payments/escrow", { credentials: "include" }),
-        fetch("/api/admin/payments/withdrawals", { credentials: "include" }),
-      ]);
-      if (eRes.ok) setEscrows(await eRes.json());
-      if (wRes.ok) setWithdrawals(await wRes.json());
-    } catch { setError("Network error"); } finally { setLoading(false); }
-  };
-
-  const processWithdrawal = async (id: number, status: "approved" | "rejected" | "completed", adminNote?: string) => {
-    setActionLoading(id);
-    try {
-      const res = await fetch(`/api/admin/payments/withdrawals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status, adminNote }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, ...updated } : w));
-      } else {
-        const d = await res.json();
-        setError(d.error ?? "Failed to process withdrawal");
+      if (t === "analytics") {
+        const res = await fetch("/api/analytics/admin", { credentials: "include" });
+        if (res.ok) setAnalytics(await res.json());
+        else setError("Failed to load analytics");
+      } else if (t === "users") {
+        const res = await fetch("/api/admin/users?limit=100", { credentials: "include" });
+        if (res.ok) setUsers(await res.json());
+        else setError("Failed to load users");
+      } else if (t === "freelancers") {
+        const res = await fetch("/api/admin/freelancers?limit=100", { credentials: "include" });
+        if (res.ok) setFreelancers(await res.json());
+        else setError("Failed to load freelancers");
+      } else if (t === "projects") {
+        const res = await fetch("/api/admin/projects?limit=100", { credentials: "include" });
+        if (res.ok) setProjects(await res.json());
+        else setError("Failed to load projects");
+      } else if (t === "reports") {
+        const res = await fetch("/api/admin/reports?limit=100", { credentials: "include" });
+        if (res.ok) setReports(await res.json());
+        else setError("Failed to load reports");
+      } else if (t === "payments") {
+        const [eRes, wRes] = await Promise.all([
+          fetch("/api/admin/payments/escrow", { credentials: "include" }),
+          fetch("/api/admin/payments/withdrawals", { credentials: "include" }),
+        ]);
+        if (eRes.ok) setEscrows(await eRes.json());
+        if (wRes.ok) setWithdrawals(await wRes.json());
       }
-    } finally { setActionLoading(null); }
-  };
+    } catch { setError("Network error"); } finally { setLoading(false); }
+  }, []);
 
   useEffect(() => {
-    if (isAdmin !== true) return;
-    if (tab === "analytics") loadAnalytics();
-    else if (tab === "overview") loadStats();
-    else if (tab === "users") loadUsers();
-    else if (tab === "projects") loadProjects();
-    else if (tab === "payments") loadPayments();
-  }, [tab, isAdmin]);
+    if (isAdmin === true) loadData(tab);
+  }, [tab, isAdmin, loadData]);
 
-  const toggleAdmin = async (user: User) => {
-    setActionLoading(user.id);
+  const patchUser = async (id: number, updates: Partial<Pick<AdminUser, "isAdmin" | "isSuspended" | "isBanned">>) => {
+    setActionLoading(id);
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
+      const res = await fetch(`/api/admin/users/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ isAdmin: !user.isAdmin }),
+        body: JSON.stringify(updates),
       });
       if (res.ok) {
         const updated = await res.json();
-        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isAdmin: updated.isAdmin } : u));
+        setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
+      } else {
+        const d = await res.json();
+        setError(d.error ?? "Failed to update user");
       }
     } finally { setActionLoading(null); }
   };
@@ -222,18 +235,76 @@ export default function AdminDashboard() {
     } finally { setActionLoading(null); }
   };
 
-  const deleteProject = async (projectId: number) => {
+  const deleteProject = async (id: number) => {
     if (!confirm("Permanently delete this project?")) return;
-    setActionLoading(projectId);
+    setActionLoading(id);
     try {
-      const res = await fetch(`/api/admin/projects/${projectId}`, { method: "DELETE", credentials: "include" });
-      if (res.ok) setProjects(prev => prev.filter(p => p.id !== projectId));
+      const res = await fetch(`/api/admin/projects/${id}`, { method: "DELETE", credentials: "include" });
+      if (res.ok) setProjects(prev => prev.filter(p => p.id !== id));
     } finally { setActionLoading(null); }
   };
 
-  if (isAdmin === null) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
+  const verifyFreelancer = async (id: number, isVerified: boolean) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`/api/admin/freelancers/${id}/verify`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ isVerified }),
+      });
+      if (res.ok) {
+        setFreelancers(prev => prev.map(f => f.id === id ? { ...f, isVerified } : f));
+      } else {
+        const d = await res.json();
+        setError(d.error ?? "Failed to update freelancer");
+      }
+    } finally { setActionLoading(null); }
+  };
 
-  if (isAdmin === false) {
+  const patchReport = async (id: number, updates: { status?: string; adminNote?: string }) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`/api/admin/reports/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setReports(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
+      } else {
+        const d = await res.json();
+        setError(d.error ?? "Failed to update report");
+      }
+    } finally { setActionLoading(null); }
+  };
+
+  const processWithdrawal = async (id: number, status: "approved" | "rejected" | "completed") => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`/api/admin/payments/withdrawals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, ...updated } : w));
+      } else {
+        const d = await res.json();
+        setError(d.error ?? "Failed to process withdrawal");
+      }
+    } finally { setActionLoading(null); }
+  };
+
+  if (isAdmin === null) {
+    return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
+  }
+
+  if (!isAdmin) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -248,493 +319,593 @@ export default function AdminDashboard() {
 
   const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "analytics", label: "Analytics", icon: TrendingUp },
-    { key: "overview", label: "Overview", icon: BarChart2 },
     { key: "users", label: "Users", icon: Users },
+    { key: "freelancers", label: "Freelancers", icon: BadgeCheck },
     { key: "projects", label: "Projects", icon: FolderOpen },
+    { key: "reports", label: "Reports", icon: ShieldAlert },
     { key: "payments", label: "Payments", icon: Wallet },
   ];
 
-  const statusIcon: Record<string, React.ElementType> = {
-    open: Clock,
-    in_progress: RefreshCw,
-    completed: CheckCircle,
-    cancelled: XCircle,
-  };
+  const filteredUsers = search
+    ? users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+    : users;
 
-  const refresh = () => {
-    setError(null);
-    if (tab === "analytics") loadAnalytics();
-    else if (tab === "overview") loadStats();
-    else if (tab === "users") loadUsers();
-    else if (tab === "projects") loadProjects();
-    else loadPayments();
-  };
+  const filteredReports = reportFilter === "all" ? reports : reports.filter(r => r.status === reportFilter);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Shield className="text-indigo-600" size={22} />
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+              <Shield size={16} className="text-white" />
+            </div>
             <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
           </div>
-          <p className="text-gray-500 text-sm">Platform management &amp; analytics</p>
+          <p className="text-gray-500 text-sm">Platform management &amp; moderation</p>
         </div>
-        <button onClick={refresh} className="btn-secondary flex items-center gap-2 py-2 px-4 text-sm">
+        <button onClick={() => loadData(tab)} className="btn-secondary flex items-center gap-2 py-2 px-4 text-sm">
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
 
-      {error && <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm">{error}</div>}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm flex items-center gap-2">
+          <AlertTriangle size={16} />
+          {error}
+          <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700 text-lg leading-none">✕</button>
+        </div>
+      )}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-8 w-fit overflow-x-auto">
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-8 overflow-x-auto">
         {TABS.map(t => (
-          <button key={t.key} onClick={() => { setTab(t.key); setError(null); }}
-            className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
-              tab === t.key ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700")}>
-            <t.icon size={15} /> {t.label}
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setSearch(""); }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
+              tab === t.key ? "bg-white shadow-sm text-indigo-700" : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            <t.icon size={14} />
+            <span className="hidden sm:inline">{t.label}</span>
           </button>
         ))}
       </div>
 
       {loading ? (
         <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>
+      ) : (
+        <>
+          {/* ── ANALYTICS ── */}
+          {tab === "analytics" && (
+            analytics ? (
+              <div className="space-y-8">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <StatCard icon={Users} label="Total Users" value={analytics.totalUsers} color="bg-blue-50 text-blue-600" />
+                  <StatCard icon={UserCheck} label="Freelancers" value={analytics.totalFreelancers} color="bg-green-50 text-green-600" />
+                  <StatCard icon={UserPlus} label="Clients" value={analytics.totalClients} color="bg-purple-50 text-purple-600" />
+                  <StatCard icon={FolderOpen} label="Projects" value={analytics.totalProjects} color="bg-indigo-50 text-indigo-600" />
+                  <StatCard icon={Activity} label="Active" value={analytics.activeProjects} color="bg-blue-50 text-blue-600" />
+                  <StatCard icon={CheckCircle} label="Completed" value={analytics.completedProjects} color="bg-emerald-50 text-emerald-600" />
+                  <StatCard icon={DollarSign} label="Revenue" value={formatCurrency(analytics.platformRevenue)} color="bg-amber-50 text-amber-600" />
+                  <StatCard icon={BarChart2} label="Open Projects" value={analytics.openProjects} color="bg-rose-50 text-rose-600" />
+                </div>
 
-      ) : tab === "analytics" && analytics ? (
-        <div className="space-y-8">
-          {/* Key metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            <StatCard icon={Users} label="Total Users" value={analytics.totalUsers} color="bg-blue-50 text-blue-600" />
-            <StatCard icon={UserCheck} label="Freelancers" value={analytics.totalFreelancers} color="bg-green-50 text-green-600" />
-            <StatCard icon={UserPlus} label="Clients" value={analytics.totalClients} color="bg-purple-50 text-purple-600" />
-            <StatCard icon={FolderOpen} label="Total Projects" value={analytics.totalProjects} color="bg-indigo-50 text-indigo-600" />
-            <StatCard icon={Activity} label="Active Projects" value={analytics.activeProjects} color="bg-blue-50 text-blue-600" />
-            <StatCard icon={CheckCircle} label="Completed" value={analytics.completedProjects} color="bg-emerald-50 text-emerald-600" />
-            <StatCard icon={DollarSign} label="Platform Revenue" value={formatCurrency(analytics.platformRevenue)} color="bg-amber-50 text-amber-600" />
-            <StatCard icon={Star} label="Total Reviews" value={analytics.completedProjects} sub="approx." color="bg-rose-50 text-rose-600" />
-          </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="card p-6">
+                    <h3 className="font-semibold text-gray-900 mb-1">Monthly Registrations</h3>
+                    <p className="text-2xl font-bold text-gray-900 mb-4">
+                      {analytics.monthlyRegistrations.reduce((s, m) => s + m.value, 0)} new users
+                    </p>
+                    <MiniChart data={analytics.monthlyRegistrations} type="bar" color="#6366f1" height={180} />
+                  </div>
+                  <div className="card p-6">
+                    <h3 className="font-semibold text-gray-900 mb-1">Monthly Revenue</h3>
+                    <p className="text-2xl font-bold text-gray-900 mb-4">
+                      {formatCurrency(analytics.monthlyRevenue.reduce((s, m) => s + m.value, 0))}
+                    </p>
+                    <MiniChart data={analytics.monthlyRevenue} type="area" color="#10b981" valuePrefix="₦" height={180} />
+                  </div>
+                </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="card p-6">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-semibold text-gray-900">Monthly Registrations</h3>
-                <span className="text-xs text-gray-400">Last 6 months</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 mb-4">
-                {analytics.monthlyRegistrations.reduce((s, m) => s + m.value, 0)} new users
-              </p>
-              <MiniChart data={analytics.monthlyRegistrations} type="bar" color="#6366f1" height={180} />
-            </div>
-
-            <div className="card p-6">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-semibold text-gray-900">Monthly Revenue</h3>
-                <span className="text-xs text-gray-400">Last 6 months (released escrow)</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 mb-4">
-                {formatCurrency(analytics.monthlyRevenue.reduce((s, m) => s + m.value, 0))}
-              </p>
-              <MiniChart data={analytics.monthlyRevenue} type="area" color="#10b981" valuePrefix="₦" height={180} />
-            </div>
-          </div>
-
-          {/* Recent activity + top freelancers */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recent registrations */}
-            <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Recent Registrations</h3>
-              <div className="space-y-3">
-                {analytics.recentUsers.map(u => (
-                  <div key={u.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                        u.role === "client" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700")}>
-                        {u.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{u.name}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className={cn("badge text-xs", u.role === "client" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700")}>{u.role}</span>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(u.createdAt)}</p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="card p-6">
+                    <h3 className="font-semibold text-gray-900 mb-4">Recent Registrations</h3>
+                    <div className="space-y-3">
+                      {analytics.recentUsers.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No users yet</p>}
+                      {analytics.recentUsers.map(u => (
+                        <div key={u.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                              u.role === "client" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700")}>
+                              {u.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                              <p className="text-xs text-gray-400">{u.email}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <StatusBadge status={u.role} />
+                            <p className="text-xs text-gray-400 mt-0.5">{formatDate(u.createdAt)}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-                {analytics.recentUsers.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No users yet</p>}
-              </div>
-            </div>
 
-            {/* Top freelancers */}
-            <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Top Freelancers by Earnings</h3>
-              <div className="space-y-3">
-                {analytics.topFreelancers.map((f, i) => (
-                  <div key={f.id} className="flex items-center gap-3">
-                    <span className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0",
-                      i === 0 ? "bg-amber-100 text-amber-700" :
-                      i === 1 ? "bg-gray-100 text-gray-600" :
-                      i === 2 ? "bg-orange-100 text-orange-700" : "bg-gray-50 text-gray-500")}>
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <Link href={`/freelancers/${f.userId}`} className="text-sm font-medium text-gray-900 hover:text-indigo-600 transition-colors truncate block">
-                        {f.name}
-                      </Link>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span>{f.completedProjects} projects</span>
-                        {f.averageRating && <span>· {f.averageRating.toFixed(1)}★</span>}
-                      </div>
+                  <div className="card p-6">
+                    <h3 className="font-semibold text-gray-900 mb-4">Top Freelancers by Earnings</h3>
+                    <div className="space-y-3">
+                      {analytics.topFreelancers.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No freelancers yet</p>}
+                      {analytics.topFreelancers.map((f, i) => (
+                        <div key={f.id} className="flex items-center gap-3">
+                          <span className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0",
+                            i === 0 ? "bg-amber-100 text-amber-700" :
+                            i === 1 ? "bg-gray-100 text-gray-600" :
+                            "bg-orange-50 text-orange-600")}>
+                            {i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
+                            <p className="text-xs text-gray-400">{f.completedProjects} projects · ★ {f.averageRating?.toFixed(1) ?? "—"}</p>
+                          </div>
+                          <p className="text-sm font-bold text-gray-900">{formatCurrency(f.totalEarnings)}</p>
+                        </div>
+                      ))}
                     </div>
-                    <span className="text-sm font-semibold text-gray-900 flex-shrink-0">{formatCurrency(f.totalEarnings)}</span>
                   </div>
-                ))}
-                {analytics.topFreelancers.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No freelancers yet</p>}
+                </div>
               </div>
-            </div>
-          </div>
+            ) : (
+              <div className="text-center py-20 text-gray-400">No analytics data available yet.</div>
+            )
+          )}
 
-          {/* Recent payments */}
-          {analytics.recentPayments.length > 0 && (
-            <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Recent Payments</h3>
-              <div className="space-y-2">
-                {analytics.recentPayments.map(p => (
-                  <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl text-sm">
-                    <Link href={`/projects/${p.projectId}`} className="text-indigo-600 hover:text-indigo-800 font-medium">
-                      Project #{p.projectId}
-                    </Link>
-                    <span className={cn("badge capitalize", {
-                      in_escrow: "bg-indigo-100 text-indigo-700",
-                      released: "bg-green-100 text-green-700",
-                      pending: "bg-yellow-100 text-yellow-700",
-                      refunded: "bg-orange-100 text-orange-700",
-                      funded: "bg-blue-100 text-blue-700",
-                    }[p.status] ?? "bg-gray-100 text-gray-600")}>
-                      {p.status.replace("_", " ")}
-                    </span>
-                    <span className="font-semibold text-gray-900">₦{parseFloat(p.amount).toLocaleString()}</span>
-                    <span className="text-gray-400 text-xs">{formatDate(p.createdAt)}</span>
+          {/* ── USERS ── */}
+          {tab === "users" && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                />
+              </div>
+              <div className="card overflow-hidden">
+                <div className="p-4 border-b border-gray-100 flex items-center gap-4">
+                  <p className="font-medium text-gray-700 text-sm">{filteredUsers.length} users</p>
+                  <div className="flex items-center gap-3 text-xs text-gray-400 ml-auto">
+                    <span className="flex items-center gap-1"><Shield size={11} className="text-indigo-400" /> = Admin</span>
+                    <span className="flex items-center gap-1"><Clock size={11} className="text-orange-400" /> = Suspend</span>
+                    <span className="flex items-center gap-1"><Ban size={11} className="text-red-400" /> = Ban</span>
                   </div>
-                ))}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {["User", "Role", "Status", "Joined", "Actions"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredUsers.length === 0 && (
+                        <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No users found</td></tr>
+                      )}
+                      {filteredUsers.map(u => (
+                        <tr key={u.id} className={cn("hover:bg-gray-50 transition-colors", u.isBanned && "opacity-60")}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                                {u.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900 flex items-center gap-1">
+                                  {u.name}
+                                  {u.isAdmin && <Shield size={11} className="text-indigo-500" />}
+                                </p>
+                                <p className="text-xs text-gray-400">{u.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3"><StatusBadge status={u.role} /></td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {u.isBanned
+                                ? <span className="badge bg-red-100 text-red-700 text-xs">Banned</span>
+                                : u.isSuspended
+                                  ? <span className="badge bg-orange-100 text-orange-700 text-xs">Suspended</span>
+                                  : <span className="badge bg-green-100 text-green-700 text-xs">Active</span>
+                              }
+                              {u.isAdmin && <span className="badge bg-indigo-100 text-indigo-700 text-xs">Admin</span>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(u.createdAt)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => patchUser(u.id, { isAdmin: !u.isAdmin })}
+                                disabled={actionLoading === u.id}
+                                title={u.isAdmin ? "Remove admin" : "Make admin"}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                              >
+                                {u.isAdmin ? <ShieldOff size={14} /> : <Shield size={14} />}
+                              </button>
+                              <button
+                                onClick={() => patchUser(u.id, { isSuspended: !u.isSuspended })}
+                                disabled={actionLoading === u.id}
+                                title={u.isSuspended ? "Unsuspend" : "Suspend"}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors disabled:opacity-50"
+                              >
+                                <Clock size={14} />
+                              </button>
+                              <button
+                                onClick={() => patchUser(u.id, { isBanned: !u.isBanned })}
+                                disabled={actionLoading === u.id}
+                                title={u.isBanned ? "Unban" : "Ban"}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                              >
+                                {u.isBanned ? <UserCheck size={14} /> : <Ban size={14} />}
+                              </button>
+                              <button
+                                onClick={() => deleteUser(u.id)}
+                                disabled={actionLoading === u.id}
+                                title="Delete user"
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Project status breakdown */}
-          <div className="card p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Project Status Breakdown</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                { label: "Open", value: analytics.openProjects, color: "bg-blue-500", text: "text-blue-700 bg-blue-50" },
-                { label: "Active", value: analytics.activeProjects, color: "bg-indigo-500", text: "text-indigo-700 bg-indigo-50" },
-                { label: "Completed", value: analytics.completedProjects, color: "bg-green-500", text: "text-green-700 bg-green-50" },
-                { label: "Cancelled", value: analytics.cancelledProjects, color: "bg-gray-400", text: "text-gray-600 bg-gray-100" },
-              ].map(item => {
-                const pct = analytics.totalProjects > 0 ? Math.round((item.value / analytics.totalProjects) * 100) : 0;
-                return (
-                  <div key={item.label} className="text-center">
-                    <div className={cn("rounded-xl py-4 px-3 mb-2", item.text)}>
-                      <p className="text-2xl font-bold">{item.value}</p>
-                      <p className="text-xs font-medium mt-0.5">{item.label}</p>
-                    </div>
-                    <p className="text-xs text-gray-400">{pct}% of total</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-      ) : tab === "overview" && stats ? (
-        <div className="space-y-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: "Total Users", value: stats.totalUsers, icon: Users, color: "bg-blue-50 text-blue-600" },
-              { label: "Total Projects", value: stats.totalProjects, icon: FolderOpen, color: "bg-indigo-50 text-indigo-600" },
-              { label: "Applications", value: stats.totalApplications, icon: FileText, color: "bg-purple-50 text-purple-600" },
-              { label: "Reviews", value: stats.totalReviews, icon: Star, color: "bg-amber-50 text-amber-600" },
-            ].map(s => (
-              <div key={s.label} className="card p-5 flex items-center gap-4">
-                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", s.color)}>
-                  <s.icon size={22} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{s.value.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">{s.label}</p>
+          {/* ── FREELANCERS ── */}
+          {tab === "freelancers" && (
+            <div className="card overflow-hidden">
+              <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                <p className="font-medium text-gray-700 text-sm">{freelancers.length} freelancer profiles</p>
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <BadgeCheck size={13} className="text-indigo-500" />
+                  Verified badge appears on freelancer profiles
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Projects by Status</h3>
-              <div className="space-y-3">
-                {stats.projectsByStatus.map(s => {
-                  const Icon = statusIcon[s.status] ?? FileText;
-                  const pct = stats.totalProjects > 0 ? Math.round((Number(s.count) / stats.totalProjects) * 100) : 0;
-                  return (
-                    <div key={s.status} className="flex items-center gap-3">
-                      <Icon size={15} className="text-gray-400 flex-shrink-0" />
-                      <span className="text-sm text-gray-600 w-24 capitalize">{s.status.replace("_", " ")}</span>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-sm font-medium text-gray-700 w-8 text-right">{Number(s.count)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Users by Role</h3>
-              <div className="space-y-3">
-                {stats.usersByRole.map(r => {
-                  const pct = stats.totalUsers > 0 ? Math.round((Number(r.count) / stats.totalUsers) * 100) : 0;
-                  return (
-                    <div key={r.role} className="flex items-center gap-3">
-                      <Users size={15} className="text-gray-400 flex-shrink-0" />
-                      <span className="text-sm text-gray-600 w-24 capitalize">{r.role}</span>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-sm font-medium text-gray-700 w-8 text-right">{Number(r.count)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-      ) : tab === "users" ? (
-        <div className="card overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <p className="font-medium text-gray-700 text-sm">{users.length} users</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {["User", "Role", "University", "Joined", "Admin", "Actions"].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {users.map(u => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={u.name} size="sm" />
-                        <div>
-                          <p className="font-medium text-gray-900">{u.name}</p>
-                          <p className="text-xs text-gray-400">{u.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3"><span className={cn("badge", u.role === "client" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700")}>{u.role}</span></td>
-                    <td className="px-4 py-3 text-gray-500">{u.university ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-400">{formatDate(u.createdAt)}</td>
-                    <td className="px-4 py-3"><span className={cn("badge text-xs", u.isAdmin ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500")}>{u.isAdmin ? "Admin" : "User"}</span></td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <button onClick={() => toggleAdmin(u)} disabled={actionLoading === u.id} title={u.isAdmin ? "Remove admin" : "Make admin"}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-                          {u.isAdmin ? <ShieldOff size={15} /> : <Shield size={15} />}
-                        </button>
-                        <button onClick={() => deleteUser(u.id)} disabled={actionLoading === u.id}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      ) : tab === "projects" ? (
-        <div className="card overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <p className="font-medium text-gray-700 text-sm">{projects.length} projects</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {["Project", "Status", "Category", "Budget", "Posted", "Actions"].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {projects.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <Link href={`/projects/${p.id}`} className="font-medium text-gray-900 hover:text-indigo-600 transition-colors">{p.title}</Link>
-                    </td>
-                    <td className="px-4 py-3"><span className={cn("badge", getStatusColor(p.status))}>{p.status.replace("_", " ")}</span></td>
-                    <td className="px-4 py-3 text-gray-500">{p.category}</td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {p.budgetMin && p.budgetMax ? `₦${parseFloat(p.budgetMin).toLocaleString()}–₦${parseFloat(p.budgetMax).toLocaleString()}` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">{formatDate(p.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <button onClick={() => deleteProject(p.id)} disabled={actionLoading === p.id}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      ) : tab === "payments" ? (
-        <div className="space-y-8">
-          <div className="card overflow-hidden">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Escrow Transactions ({escrows.length})</h3>
-            </div>
-            {escrows.length === 0 ? (
-              <div className="p-8 text-center text-gray-400 text-sm">No escrow transactions yet.</div>
-            ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      {["Project", "Client → Freelancer", "Amount", "Status", "Funded", "Actions"].map(h => (
+                      {["Freelancer", "Headline", "Rate", "Rating", "Projects", "Earnings", "Status", "Action"].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {escrows.map(e => (
-                      <tr key={e.id} className="hover:bg-gray-50">
+                    {freelancers.length === 0 && (
+                      <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No freelancer profiles yet</td></tr>
+                    )}
+                    {freelancers.map(f => (
+                      <tr key={f.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
-                          <Link href={`/projects/${e.projectId}`} className="font-medium text-indigo-600 hover:text-indigo-800 text-sm">
-                            {e.projectTitle ?? `Project #${e.projectId}`}
+                          <div className="flex items-center gap-2">
+                            <Avatar name={f.user?.name ?? "?"} avatarUrl={f.user?.avatarUrl} size="sm" />
+                            <div>
+                              <p className="font-medium text-gray-900 text-xs">{f.user?.name ?? "—"}</p>
+                              <p className="text-xs text-gray-400">{f.user?.email ?? "—"}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs max-w-[140px]">
+                          <p className="truncate">{f.headline}</p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 text-xs">₦{f.hourlyRate.toLocaleString()}/hr</td>
+                        <td className="px-4 py-3 text-gray-700 text-xs">
+                          {f.averageRating != null ? `★ ${f.averageRating.toFixed(1)}` : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 text-xs">{f.completedProjects}</td>
+                        <td className="px-4 py-3 text-gray-700 text-xs">{formatCurrency(f.totalEarnings)}</td>
+                        <td className="px-4 py-3">
+                          {f.isVerified
+                            ? <span className="flex items-center gap-1 text-green-700 text-xs font-semibold"><BadgeCheck size={13} /> Verified</span>
+                            : <span className="text-gray-400 text-xs">Unverified</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => verifyFreelancer(f.id, !f.isVerified)}
+                            disabled={actionLoading === f.id}
+                            className={cn(
+                              "text-xs px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-50 font-medium",
+                              f.isVerified
+                                ? "bg-red-50 text-red-700 hover:bg-red-100 border-red-200"
+                                : "bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
+                            )}
+                          >
+                            {actionLoading === f.id ? "…" : f.isVerified ? "Unverify" : "Verify"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── PROJECTS ── */}
+          {tab === "projects" && (
+            <div className="card overflow-hidden">
+              <div className="p-4 border-b border-gray-100">
+                <p className="font-medium text-gray-700 text-sm">{projects.length} projects</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {["Project", "Status", "Category", "Budget", "Posted", "Actions"].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {projects.length === 0 && (
+                      <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No projects yet</td></tr>
+                    )}
+                    {projects.map(p => (
+                      <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <Link href={`/projects/${p.id}`} className="font-medium text-gray-900 hover:text-indigo-600 transition-colors line-clamp-1 max-w-[200px] block">
+                            {p.title}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">
-                          {e.clientName ?? "—"} <span className="text-gray-400">→</span> {e.freelancerName ?? "—"}
+                        <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{p.category}</td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">
+                          {p.budgetMin && p.budgetMax
+                            ? `₦${parseFloat(p.budgetMin).toLocaleString()}–₦${parseFloat(p.budgetMax).toLocaleString()}`
+                            : "—"}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-gray-900">₦{parseFloat(e.amount).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(p.createdAt)}</td>
                         <td className="px-4 py-3">
-                          <span className={cn("badge capitalize", {
-                            in_escrow: "bg-indigo-100 text-indigo-700",
-                            released: "bg-green-100 text-green-700",
-                            pending: "bg-yellow-100 text-yellow-700",
-                            refunded: "bg-orange-100 text-orange-700",
-                            funded: "bg-blue-100 text-blue-700",
-                            cancelled: "bg-gray-100 text-gray-600",
-                          }[e.status] ?? "bg-gray-100 text-gray-600")}>
-                            {e.status.replace("_", " ")}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{e.fundedAt ? formatDate(e.fundedAt) : "—"}</td>
-                        <td className="px-4 py-3">
-                          {["funded", "in_escrow"].includes(e.status) && (
-                            <button onClick={async () => {
-                              if (!confirm("Issue refund for this escrow?")) return;
-                              setActionLoading(e.id);
-                              try {
-                                await fetch(`/api/payments/refund/${e.projectId}`, { method: "POST", credentials: "include" });
-                                loadPayments();
-                              } finally { setActionLoading(null); }
-                            }} disabled={actionLoading === e.id}
-                              className="text-xs px-3 py-1.5 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors disabled:opacity-50">
-                              Refund
+                          <div className="flex gap-1">
+                            <Link href={`/projects/${p.id}`}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                              <Eye size={14} />
+                            </Link>
+                            <button onClick={() => deleteProject(p.id)} disabled={actionLoading === p.id}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                              <Trash2 size={14} />
                             </button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-
-          <div className="card overflow-hidden">
-            <div className="p-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Withdrawal Requests ({withdrawals.length})</h3>
             </div>
-            {withdrawals.length === 0 ? (
-              <div className="p-8 text-center text-gray-400 text-sm">No withdrawal requests yet.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {["Freelancer", "Amount", "Bank Details", "Status", "Note", "Actions"].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {withdrawals.map(w => (
-                      <tr key={w.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{w.userName ?? "—"}</p>
-                          <p className="text-xs text-gray-400">{w.userEmail ?? "—"}</p>
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-gray-900">₦{parseFloat(w.amount).toLocaleString()}</td>
-                        <td className="px-4 py-3 text-xs text-gray-600">
-                          <p>{w.bankName}</p>
-                          <p className="font-mono">{w.accountNumber}</p>
-                          <p className="text-gray-400">{w.accountName}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={cn("badge capitalize", {
-                            pending: "bg-yellow-100 text-yellow-700",
-                            approved: "bg-blue-100 text-blue-700",
-                            completed: "bg-green-100 text-green-700",
-                            rejected: "bg-red-100 text-red-700",
-                          }[w.status] ?? "bg-gray-100 text-gray-600")}>
-                            {w.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate">{w.note ?? w.adminNote ?? "—"}</td>
-                        <td className="px-4 py-3">
-                          {w.status === "pending" && (
-                            <div className="flex gap-1">
-                              <button onClick={() => processWithdrawal(w.id, "approved")} disabled={actionLoading === w.id}
-                                className="text-xs px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg disabled:opacity-50">
-                                Approve
-                              </button>
-                              <button onClick={() => processWithdrawal(w.id, "rejected", "Rejected by admin")} disabled={actionLoading === w.id}
-                                className="text-xs px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg disabled:opacity-50">
-                                Reject
-                              </button>
-                            </div>
-                          )}
-                          {w.status === "approved" && (
-                            <button onClick={() => processWithdrawal(w.id, "completed")} disabled={actionLoading === w.id}
-                              className="text-xs px-2 py-1 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg disabled:opacity-50">
-                              Mark Done
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          )}
+
+          {/* ── REPORTS ── */}
+          {tab === "reports" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {["all", "pending", "reviewed", "resolved", "dismissed"].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setReportFilter(f)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-all capitalize",
+                      reportFilter === f
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    )}
+                  >
+                    {f}
+                    {f !== "all" && (
+                      <span className="ml-1.5 text-xs opacity-70">
+                        ({reports.filter(r => r.status === f).length})
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+
+              {filteredReports.length === 0 ? (
+                <div className="card p-12 text-center">
+                  <ShieldAlert size={40} className="text-gray-200 mx-auto mb-3" />
+                  <p className="text-gray-500 font-medium">
+                    {reportFilter === "all" ? "No reports yet" : `No ${reportFilter} reports`}
+                  </p>
+                  <p className="text-gray-400 text-sm mt-1">All clear in this category.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredReports.map(r => (
+                    <div key={r.id} className="card p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <StatusBadge status={r.status} />
+                            <span className={cn("badge text-xs capitalize",
+                              r.targetType === "user" ? "bg-blue-100 text-blue-700" :
+                              r.targetType === "project" ? "bg-purple-100 text-purple-700" :
+                              "bg-gray-100 text-gray-600")}>
+                              {r.targetType} #{r.targetId}
+                            </span>
+                            <span className="badge bg-gray-100 text-gray-600 text-xs capitalize">
+                              {r.reason.replace(/_/g, " ")}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700">
+                            Reported by <span className="font-medium">{r.reporterName}</span>
+                            <span className="text-gray-400 ml-2 text-xs">{formatDate(r.createdAt)}</span>
+                          </p>
+                          {r.description && (
+                            <p className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mt-2">{r.description}</p>
+                          )}
+                          {r.adminNote && (
+                            <p className="text-sm text-indigo-700 bg-indigo-50 rounded-lg px-3 py-2 mt-2">
+                              <span className="font-medium">Admin note:</span> {r.adminNote}
+                            </p>
+                          )}
+                          {r.targetType === "project" && (
+                            <Link href={`/projects/${r.targetId}`}
+                              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline mt-2">
+                              <Eye size={12} /> View project
+                            </Link>
+                          )}
+                        </div>
+                        {(r.status === "pending" || r.status === "reviewed") && (
+                          <div className="flex flex-wrap gap-2 flex-shrink-0">
+                            {r.status === "pending" && (
+                              <button
+                                onClick={() => patchReport(r.id, { status: "reviewed" })}
+                                disabled={actionLoading === r.id}
+                                className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Review
+                              </button>
+                            )}
+                            <button
+                              onClick={() => patchReport(r.id, { status: "resolved" })}
+                              disabled={actionLoading === r.id}
+                              className="text-xs px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              Resolve
+                            </button>
+                            <button
+                              onClick={() => patchReport(r.id, { status: "dismissed" })}
+                              disabled={actionLoading === r.id}
+                              className="text-xs px-3 py-1.5 bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── PAYMENTS ── */}
+          {tab === "payments" && (
+            <div className="space-y-8">
+              <div className="card overflow-hidden">
+                <div className="p-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Escrow Transactions ({escrows.length})</h3>
+                </div>
+                {escrows.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 text-sm">No escrow transactions yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {["Project", "Client → Freelancer", "Amount", "Status", "Funded"].map(h => (
+                            <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {escrows.map(e => (
+                          <tr key={e.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <Link href={`/projects/${e.projectId}`} className="font-medium text-indigo-600 hover:text-indigo-800 text-sm">
+                                {e.projectTitle ?? `Project #${e.projectId}`}
+                              </Link>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 text-xs">
+                              {e.clientName ?? "—"} <span className="text-gray-300">→</span> {e.freelancerName ?? "—"}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-gray-900">₦{parseFloat(e.amount).toLocaleString()}</td>
+                            <td className="px-4 py-3"><StatusBadge status={e.status} /></td>
+                            <td className="px-4 py-3 text-gray-400 text-xs">{e.fundedAt ? formatDate(e.fundedAt) : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="card overflow-hidden">
+                <div className="p-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Withdrawal Requests ({withdrawals.length})</h3>
+                </div>
+                {withdrawals.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 text-sm">No withdrawal requests yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {["Freelancer", "Amount", "Bank Details", "Status", "Actions"].map(h => (
+                            <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {withdrawals.map(w => (
+                          <tr key={w.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-gray-900">{w.userName ?? "—"}</p>
+                              <p className="text-xs text-gray-400">{w.userEmail ?? "—"}</p>
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-gray-900">₦{parseFloat(w.amount).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">
+                              <p>{w.bankName}</p>
+                              <p className="font-mono">{w.accountNumber}</p>
+                              <p className="text-gray-400">{w.accountName}</p>
+                            </td>
+                            <td className="px-4 py-3"><StatusBadge status={w.status} /></td>
+                            <td className="px-4 py-3">
+                              {w.status === "pending" && (
+                                <div className="flex gap-1">
+                                  <button onClick={() => processWithdrawal(w.id, "approved")} disabled={actionLoading === w.id}
+                                    className="text-xs px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg disabled:opacity-50">
+                                    Approve
+                                  </button>
+                                  <button onClick={() => processWithdrawal(w.id, "rejected")} disabled={actionLoading === w.id}
+                                    className="text-xs px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg disabled:opacity-50">
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
+                              {w.status === "approved" && (
+                                <button onClick={() => processWithdrawal(w.id, "completed")} disabled={actionLoading === w.id}
+                                  className="text-xs px-2 py-1 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg disabled:opacity-50">
+                                  Mark Done
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ export default function UnverifiedBanner() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
-  if (!user || user.emailVerified || dismissed) return null;
+  if (!user || user.emailVerified || dismissed || process.env.NODE_ENV !== "production") return null;
 
   const handleResend = async () => {
     setSending(true);
