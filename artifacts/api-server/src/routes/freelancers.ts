@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, ilike, or, sql, inArray } from "drizzle-orm";
+import { eq, ilike, or, sql, inArray, SQL } from "drizzle-orm";
 import {
   db, freelancerProfilesTable, usersTable, freelancerSkillsTable,
   skillsTable, portfolioItemsTable, projectsTable,
@@ -179,7 +179,7 @@ router.post("/me/skills", requireAuth, requireRole("freelancer"), async (req, re
 });
 
 router.delete("/me/skills/:skillId", requireAuth, requireRole("freelancer"), async (req, res) => {
-  const skillId = parseInt(req.params.skillId, 10);
+  const skillId = parseInt(req.params.skillId as string, 10);
   if (isNaN(skillId)) { res.status(400).json({ error: "Invalid skillId" }); return; }
 
   const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
@@ -217,7 +217,7 @@ router.post("/me/portfolio", requireAuth, requireRole("freelancer"), async (req,
 });
 
 router.delete("/me/portfolio/:itemId", requireAuth, requireRole("freelancer"), async (req, res) => {
-  const itemId = parseInt(req.params.itemId, 10);
+  const itemId = parseInt(req.params.itemId as string, 10);
   if (isNaN(itemId)) { res.status(400).json({ error: "Invalid itemId" }); return; }
 
   const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
@@ -261,7 +261,7 @@ router.get("/", optionalAuth, async (req, res) => {
     user: { id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role, university: usersTable.university, avatarUrl: usersTable.avatarUrl, emailVerified: usersTable.emailVerified, createdAt: usersTable.createdAt },
   }).from(freelancerProfilesTable).innerJoin(usersTable, eq(freelancerProfilesTable.userId, usersTable.id)).$dynamic();
 
-  const conditions = [];
+  const conditions: SQL<unknown>[] = [];
   if (profileIds !== null) conditions.push(inArray(freelancerProfilesTable.id, profileIds));
   if (search) conditions.push(or(ilike(usersTable.name, `%${search}%`), ilike(freelancerProfilesTable.headline, `%${search}%`), ilike(freelancerProfilesTable.bio, `%${search}%`))!);
 
@@ -301,7 +301,7 @@ router.get("/", optionalAuth, async (req, res) => {
 
 // Public freelancer profile by id — optionalAuth for B2 (exclude owner view)
 router.get("/:id", optionalAuth, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [profile] = await db.select().from(freelancerProfilesTable).where(eq(freelancerProfilesTable.id, id));
@@ -322,7 +322,7 @@ router.get("/:id", optionalAuth, async (req, res) => {
 });
 
 router.get("/:id/portfolio", async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.id, id));

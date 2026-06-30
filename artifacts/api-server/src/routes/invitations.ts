@@ -173,7 +173,7 @@ router.get("/", requireAuth, async (req, res) => {
 
 // PATCH /api/invitations/:id — freelancer accepts or declines
 router.patch("/:id", requireAuth, requireRole("freelancer"), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { status } = req.body as { status: "accepted" | "declined" };

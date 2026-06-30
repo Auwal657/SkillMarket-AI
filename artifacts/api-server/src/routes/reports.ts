@@ -122,7 +122,7 @@ router.patch("/admin/:id", requireAuth, async (req, res) => {
     return;
   }
 
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;

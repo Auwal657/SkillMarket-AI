@@ -191,6 +191,23 @@ export declare const freelancerProfilesTable: import("drizzle-orm/pg-core").PgTa
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        isVerified: import("drizzle-orm/pg-core").PgColumn<{
+            name: "is_verified";
+            tableName: "freelancer_profiles";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "freelancer_profiles";
@@ -238,6 +255,7 @@ export declare const insertFreelancerProfileSchema: z.ZodObject<{
         busy: "busy";
         unavailable: "unavailable";
     }>>;
+    isVerified: z.ZodOptional<z.ZodBoolean>;
 }, {
     out: {};
     in: {};

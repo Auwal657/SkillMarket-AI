@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
-import type { AiRecommendation, Application, ApplicationInput, ApplicationStatusUpdate, AuthResponse, ClientDashboard, ErrorResponse, FreelancerDashboard, FreelancerProfile, FreelancerProfileInput, FreelancerProfileUpdate, FreelancerSkill, HealthStatus, ListFreelancersParams, ListProjectsParams, LoginInput, MessageResponse, PortfolioItem, PortfolioItemInput, Project, ProjectInput, ProjectUpdate, RegisterInput, Skill, SkillInput, User, UserUpdate } from './api.schemas';
+import type { ProjectFreelancerRecommendations, AiRecommendation, Application, ApplicationInput, ApplicationStatusUpdate, AuthResponse, ClientDashboard, ErrorResponse, FreelancerDashboard, FreelancerProfile, FreelancerProfileInput, FreelancerProfileUpdate, FreelancerSkill, HealthStatus, ListFreelancersParams, ListProjectsParams, LoginInput, MessageResponse, PortfolioItem, PortfolioItemInput, Project, ProjectInput, ProjectUpdate, RegisterInput, Skill, SkillInput, User, UserUpdate } from './api.schemas';
 import { customFetch } from '../custom-fetch';
 import type { ErrorType, BodyType } from '../custom-fetch';
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -797,6 +797,29 @@ export type GetClientDashboardQueryError = ErrorType<unknown>;
  */
 export declare function useGetClientDashboard<TData = Awaited<ReturnType<typeof getClientDashboard>>, TError = ErrorType<unknown>>(options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getClientDashboard>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+export declare const getGetAiFreelancerRecommendationsUrl: () => string;
+/**
+ * @summary Get AI-matched freelancer recommendations for client's open projects
+ */
+export declare const getAiFreelancerRecommendations: (options?: RequestInit) => Promise<ProjectFreelancerRecommendations[]>;
+export declare const getGetAiFreelancerRecommendationsQueryKey: () => readonly ["/api/dashboard/ai-freelancers"];
+export declare const getGetAiFreelancerRecommendationsQueryOptions: <TData = Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetAiFreelancerRecommendationsQueryResult = NonNullable<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>>;
+export type GetAiFreelancerRecommendationsQueryError = ErrorType<unknown>;
+/**
+ * @summary Get AI-matched freelancer recommendations for client's open projects
+ */
+export declare function useGetAiFreelancerRecommendations<TData = Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAiFreelancerRecommendations>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

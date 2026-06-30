@@ -71,7 +71,7 @@ router.post("/", requireAuth, requireRole("freelancer"), async (req, res) => {
 });
 
 router.delete("/:id", requireAuth, requireRole("freelancer"), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [app] = await db.select().from(applicationsTable).where(eq(applicationsTable.id, id));
@@ -84,7 +84,7 @@ router.delete("/:id", requireAuth, requireRole("freelancer"), async (req, res) =
 });
 
 router.patch("/:id/status", requireAuth, requireRole("client"), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const parsed = UpdateApplicationStatusBody.safeParse(req.body);
@@ -101,7 +101,7 @@ router.patch("/:id/status", requireAuth, requireRole("client"), async (req, res)
   if (app.status === parsed.data.status) {
     const [freelancer] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, app.freelancerId));
     const [fp] = await db.select({ headline: freelancerProfilesTable.headline }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, app.freelancerId));
-    return res.json({ ...app, projectTitle: project.title, freelancerName: freelancer?.name ?? null, freelancerHeadline: fp?.headline ?? null });
+    res.json({ ...app, projectTitle: project.title, freelancerName: freelancer?.name ?? null, freelancerHeadline: fp?.headline ?? null }); return;
   }
 
   const [updated] = await db.update(applicationsTable).set({ status: parsed.data.status }).where(eq(applicationsTable.id, id)).returning();

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { releaseEscrow } from "./payments";
-import { eq, ilike, or, sql, and, inArray, gte, lte } from "drizzle-orm";
+import { eq, ilike, or, sql, and, inArray, gte, lte, SQL } from "drizzle-orm";
 import { db, projectsTable, usersTable, applicationsTable, notificationsTable, freelancerProfilesTable } from "@workspace/db";
 import { CreateProjectBody, UpdateProjectBody } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -53,7 +53,7 @@ router.get("/", async (req, res) => {
 
   let query = db.select().from(projectsTable).$dynamic();
 
-  const conditions = [];
+  const conditions: SQL<unknown>[] = [];
   if (category) conditions.push(ilike(projectsTable.category, `%${category}%`));
   if (search) conditions.push(or(ilike(projectsTable.title, `%${search}%`), ilike(projectsTable.description, `%${search}%`))!);
   if (status) conditions.push(eq(projectsTable.status, status as "open" | "in_progress" | "completed" | "cancelled"));
@@ -101,7 +101,7 @@ router.post("/", requireAuth, requireRole("client"), async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
@@ -116,7 +116,7 @@ router.get("/:id", async (req, res) => {
 });
 
 router.patch("/:id", requireAuth, requireRole("client"), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
@@ -154,7 +154,7 @@ router.patch("/:id", requireAuth, requireRole("client"), async (req, res) => {
 // Mark a project as completed — transitions in_progress → completed
 // Notifies the accepted freelancer so they can leave a review request
 router.patch("/:id/complete", requireAuth, requireRole("client"), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
@@ -219,7 +219,7 @@ router.patch("/:id/complete", requireAuth, requireRole("client"), async (req, re
 });
 
 router.delete("/:id", requireAuth, requireRole("client"), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [project] = await db.select({ clientId: projectsTable.clientId }).from(projectsTable).where(eq(projectsTable.id, id));
@@ -231,7 +231,7 @@ router.delete("/:id", requireAuth, requireRole("client"), async (req, res) => {
 });
 
 router.get("/:projectId/applications", requireAuth, requireRole("client"), async (req, res) => {
-  const projectId = parseInt(req.params.projectId, 10);
+  const projectId = parseInt(req.params.projectId as string, 10);
   if (isNaN(projectId)) { res.status(400).json({ error: "Invalid projectId" }); return; }
 
   const [project] = await db.select({ clientId: projectsTable.clientId, title: projectsTable.title }).from(projectsTable).where(eq(projectsTable.id, projectId));

@@ -80,7 +80,7 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.patch("/users/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { isAdmin, isSuspended, isBanned, emailVerified } = req.body as {
@@ -118,7 +118,7 @@ router.patch("/users/:id", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.delete("/users/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   if (id === req.user!.userId) { res.status(400).json({ error: "Cannot delete yourself" }); return; }
   await db.delete(usersTable).where(eq(usersTable.id, id));
@@ -149,7 +149,7 @@ router.get("/projects", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.delete("/projects/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(projectsTable).where(eq(projectsTable.id, id));
   res.json({ message: "Project deleted" });
@@ -193,7 +193,7 @@ router.get("/freelancers", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.patch("/freelancers/:id/verify", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { isVerified } = req.body as { isVerified: boolean };
@@ -236,7 +236,7 @@ router.get("/reports", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.patch("/reports/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { status, adminNote } = req.body as { status?: string; adminNote?: string };
@@ -344,7 +344,7 @@ router.get("/payments/withdrawals", requireAuth, requireAdmin, async (_req, res)
 });
 
 router.patch("/payments/withdrawals/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { status, adminNote } = req.body as { status?: string; adminNote?: string };

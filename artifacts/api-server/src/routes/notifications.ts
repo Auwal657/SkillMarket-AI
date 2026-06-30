@@ -26,7 +26,7 @@ router.patch("/read-all", requireAuth, async (req, res) => {
 });
 
 router.patch("/:id/read", requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [notif] = await db.select({ userId: notificationsTable.userId }).from(notificationsTable).where(eq(notificationsTable.id, id));

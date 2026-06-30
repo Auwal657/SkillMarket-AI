@@ -65,7 +65,7 @@ router.get("/conversations", requireAuth, async (req, res) => {
 });
 
 router.get("/:conversationId", requireAuth, async (req, res) => {
-  const conversationId = parseInt(req.params.conversationId, 10);
+  const conversationId = parseInt(req.params.conversationId as string, 10);
   if (isNaN(conversationId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const uid = req.user!.userId;
 

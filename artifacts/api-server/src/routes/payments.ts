@@ -252,7 +252,7 @@ router.post("/verify", requireAuth, async (req, res) => {
 
 // GET /api/payments/escrow/:projectId — get escrow status for a project
 router.get("/escrow/:projectId", requireAuth, async (req, res) => {
-  const projectId = parseInt(req.params.projectId, 10);
+  const projectId = parseInt(req.params.projectId as string, 10);
   if (isNaN(projectId)) { res.status(400).json({ error: "Invalid projectId" }); return; }
 
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
@@ -283,7 +283,7 @@ router.get("/escrow/:projectId", requireAuth, async (req, res) => {
 
 // POST /api/payments/release/:projectId — client manually releases escrow
 router.post("/release/:projectId", requireAuth, requireRole("client"), async (req, res) => {
-  const projectId = parseInt(req.params.projectId, 10);
+  const projectId = parseInt(req.params.projectId as string, 10);
   if (isNaN(projectId)) { res.status(400).json({ error: "Invalid projectId" }); return; }
 
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
@@ -300,7 +300,7 @@ router.post("/release/:projectId", requireAuth, requireRole("client"), async (re
 
 // POST /api/payments/refund/:projectId — admin or client requests refund
 router.post("/refund/:projectId", requireAuth, async (req, res) => {
-  const projectId = parseInt(req.params.projectId, 10);
+  const projectId = parseInt(req.params.projectId as string, 10);
   if (isNaN(projectId)) { res.status(400).json({ error: "Invalid projectId" }); return; }
 
   const uid = req.user!.userId;

@@ -17,7 +17,7 @@ const CreateReviewBody = z.object({
 });
 
 router.get("/freelancer/:id", async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const reviews = await db.select().from(reviewsTable)
@@ -43,7 +43,7 @@ router.get("/freelancer/:id", async (req, res) => {
 // Check whether the current user (client) can review a given freelancer profile
 // Requires an accepted application from this freelancer on one of the client's projects
 router.get("/can-review/:freelancerProfileId", requireAuth, requireRole("client"), async (req, res) => {
-  const freelancerProfileId = parseInt(req.params.freelancerProfileId, 10);
+  const freelancerProfileId = parseInt(req.params.freelancerProfileId as string, 10);
   if (isNaN(freelancerProfileId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [fp] = await db.select({ userId: freelancerProfilesTable.userId })

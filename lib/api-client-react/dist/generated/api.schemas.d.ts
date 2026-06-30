@@ -46,6 +46,8 @@ export interface User {
     university?: string | null;
     /** @nullable */
     avatarUrl?: string | null;
+    /** @nullable */
+    emailVerified?: boolean | null;
     createdAt: string;
 }
 export interface AuthResponse {
@@ -101,6 +103,7 @@ export interface FreelancerProfile {
     /** @nullable */
     averageRating?: number | null;
     totalReviews?: number;
+    profileViews?: number;
     skills?: FreelancerSkill[];
     portfolio?: PortfolioItem[];
     createdAt: string;
@@ -257,6 +260,46 @@ export interface AiRecommendation {
     matchScore: number;
     matchReasons: string[];
 }
+export interface FreelancerSkillBrief {
+    skillName?: string;
+    proficiencyLevel?: string;
+}
+export interface FreelancerBriefUser {
+    id?: number;
+    name?: string;
+    avatarUrl?: string | null;
+    university?: string | null;
+}
+export interface FreelancerBrief {
+    id: number;
+    userId: number;
+    user?: FreelancerBriefUser;
+    headline: string;
+    bio?: string;
+    hourlyRate: number;
+    availabilityStatus: string;
+    completedProjects: number;
+    averageRating?: number | null;
+    totalReviews?: number;
+    skills?: FreelancerSkillBrief[];
+}
+export interface FreelancerRecommendation {
+    freelancer: FreelancerBrief;
+    matchScore: number;
+    matchReasons: string[];
+}
+export interface ProjectBrief {
+    id: number;
+    title: string;
+    category: string;
+    requiredSkills: string[];
+    budgetMin: number;
+    budgetMax: number;
+}
+export interface ProjectFreelancerRecommendations {
+    project: ProjectBrief;
+    recommendations: FreelancerRecommendation[];
+}
 export type ListFreelancersParams = {
     skill?: string;
     search?: string;
@@ -267,6 +310,9 @@ export type ListProjectsParams = {
     category?: string;
     search?: string;
     status?: string;
+    budgetMin?: number;
+    budgetMax?: number;
+    skills?: string;
     limit?: number;
     offset?: number;
 };

@@ -20,7 +20,7 @@ function isValidAvatarUrl(url: string | null | undefined): boolean {
 
 // S9: Require authentication to view a user profile (prevents unauthenticated enumeration)
 router.get("/:id", requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
@@ -45,7 +45,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 
 // Public client profile — no auth required
 router.get("/:id/client-profile", async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
@@ -66,7 +66,7 @@ router.get("/:id/client-profile", async (req, res) => {
 });
 
 router.patch("/:id", requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   // Only allow users to update their own profile
@@ -120,7 +120,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
 });
 
 router.delete("/:id", requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   if (req.user!.userId !== id) {

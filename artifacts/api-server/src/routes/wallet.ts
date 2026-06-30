@@ -151,7 +151,7 @@ router.get("/invoices", requireAuth, async (req, res) => {
   }
 
   // Enrich with project titles
-  const projectIds = [...new Set(invoices.map(i => i.projectId))];
+  const projectIds = [...new Set(invoices.map(i => i.projectId as number))] as number[];
   const projects = projectIds.length > 0
     ? await db.select({ id: projectsTable.id, title: projectsTable.title })
         .from(projectsTable)
@@ -171,7 +171,7 @@ router.get("/invoices", requireAuth, async (req, res) => {
 
 // GET /api/wallet/invoices/:id — single invoice detail
 router.get("/invoices/:id", requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
