@@ -4944,7 +4944,7 @@ app.get("/og/project/:id", async (req, res) => {
 if (process.env.NODE_ENV === "production") {
   const frontendDist = import_path2.default.join(process.cwd(), "artifacts/skillmarket/dist");
   app.use(import_express20.default.static(frontendDist));
-  app.get("*", (_req, res) => {
+  app.get("/{*splat}", (_req, res) => {
     res.sendFile(import_path2.default.join(frontendDist, "index.html"));
   });
 } else {

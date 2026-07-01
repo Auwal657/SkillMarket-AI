@@ -172,7 +172,7 @@ app.get("/og/project/:id", async (req, res) => {
 if (process.env.NODE_ENV === "production") {
   const frontendDist = path.join(process.cwd(), "artifacts/skillmarket/dist");
   app.use(express.static(frontendDist));
-  app.get("*", (_req, res) => {
+  app.get("/{*splat}", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
