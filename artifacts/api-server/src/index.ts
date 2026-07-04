@@ -136,8 +136,9 @@ app.use("/api/payments", paymentsRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
-// Serve uploaded files as static assets
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Serve uploaded files as static assets — resolve relative to dist/index.js,
+// not process.cwd(), so the path is correct regardless of launch directory.
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Online presence endpoint
 app.get("/api/presence", (req, res) => {

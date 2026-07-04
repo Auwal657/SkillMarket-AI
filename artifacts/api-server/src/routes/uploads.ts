@@ -6,7 +6,9 @@ import { requireAuth } from "../lib/auth";
 
 const router = Router();
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+// Resolve relative to dist/index.js (__dirname) so the upload directory is
+// always correct regardless of the process launch directory.
+const UPLOAD_DIR = path.join(__dirname, "../uploads");
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
