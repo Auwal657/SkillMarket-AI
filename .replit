@@ -61,6 +61,8 @@ externalPort = 8080
 [userenv]
 
 [userenv.shared]
+FROM_EMAIL = "noreply@skillmarket.ai"
+LOG_LEVEL = "info"
 
 [deployment]
 deploymentTarget = "cloudrun"
