@@ -70,3 +70,65 @@ export async function sendVerificationEmail(
     logger.error({ err, to }, "Failed to send verification email");
   }
 }
+
+export async function sendPasswordResetEmail(
+  to: string,
+  token: string,
+  req?: { protocol?: string; get?: (h: string) => string | string[] | undefined }
+): Promise<void> {
+  // Adapt the wider Express get() signature to the narrower one getBaseUrl expects
+  const narrowedReq = req
+    ? { protocol: req.protocol, get: (h: string) => { const v = req.get?.(h); return Array.isArray(v) ? v[0] : (v ?? ""); } }
+    : undefined;
+  const baseUrl = getBaseUrl(narrowedReq);
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+  if (!resend) {
+    logger.info("Email provider not configured — password reset email not sent. Set RESEND_API_KEY to enable.");
+    return;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:40px 20px">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+        <tr>
+          <td style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:32px 40px;text-align:center">
+            <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;margin-bottom:12px">S</div>
+            <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">SkillMarket AI</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px">
+            <h2 style="margin:0 0 8px;color:#111827;font-size:20px;font-weight:700">Reset your password</h2>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">We received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+            <div style="text-align:center;margin:32px 0">
+              <a href="${resetUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:.01em">Reset my password</a>
+            </div>
+            <p style="margin:0 0 8px;color:#6b7280;font-size:13px">Or copy this link into your browser:</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:10px 14px;border-radius:8px">${resetUrl}</p>
+            <p style="margin:0;color:#9ca3af;font-size:12px;border-top:1px solid #f3f4f6;padding-top:20px">If you didn't request a password reset, you can safely ignore this email. Your password will not change.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: "Reset your SkillMarket AI password",
+      html,
+    });
+    logger.info({ to }, "Password reset email sent");
+  } catch (err) {
+    logger.error({ err, to }, "Failed to send password reset email");
+  }
+}

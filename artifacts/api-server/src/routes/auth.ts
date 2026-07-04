@@ -5,7 +5,7 @@ import { eq, and, gt } from "drizzle-orm";
 import { db, usersTable, passwordResetTokensTable } from "@workspace/db";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { signToken, requireAuth, setTokenCookie, clearTokenCookie } from "../lib/auth";
-import { sendVerificationEmail } from "../lib/email";
+import { sendVerificationEmail, sendPasswordResetEmail } from "../lib/email";
 import rateLimit from "express-rate-limit";
 
 const router = Router();
@@ -211,7 +211,11 @@ router.post("/forgot-password", async (req, res) => {
 
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
 
-  res.json({ token, message: "Reset link generated." });
+  // Send the token exclusively via email. In dev without RESEND_API_KEY the
+  // reset URL is logged to the server console instead of emailed.
+  await sendPasswordResetEmail(user.email, token, req);
+
+  res.json({ message: "If that email is registered, a reset link has been sent." });
 });
 
 // GET /api/auth/verify-reset-token/:token

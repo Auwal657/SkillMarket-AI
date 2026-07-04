@@ -40,17 +40,21 @@ const PORT = parseInt(process.env.PORT ?? "8080", 10);
 
 app.set("trust proxy", 1);
 
-// S3: Restrict CORS to known origins; reflect any origin in development
+// S3: Restrict CORS to known origins; reflect any origin in development only
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : null;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow same-origin requests (no Origin header) and non-browser clients
       if (!origin) return callback(null, true);
-      // In production, only allow explicitly listed origins
+      // In production, require an explicit allow-list — deny unknown origins
+      if (IS_PRODUCTION && !ALLOWED_ORIGINS) {
+        return callback(new Error("ALLOWED_ORIGINS must be set in production"), false);
+      }
       if (ALLOWED_ORIGINS) {
         return callback(null, ALLOWED_ORIGINS.includes(origin));
       }
