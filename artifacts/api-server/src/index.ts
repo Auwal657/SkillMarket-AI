@@ -197,7 +197,11 @@ app.get("/og/project/:id", async (req, res) => {
 
 // In production, serve the built React frontend and handle SPA routing
 if (process.env.NODE_ENV === "production") {
-  const frontendDist = path.join(process.cwd(), "artifacts/skillmarket/dist");
+  // Use __dirname (dir of dist/index.js) rather than process.cwd() so the
+  // path is correct regardless of which directory the process is launched from.
+  // dist/index.js lives at artifacts/api-server/dist/, so ../../skillmarket/dist
+  // always resolves to artifacts/skillmarket/dist/.
+  const frontendDist = path.join(__dirname, "../../skillmarket/dist");
   app.use(express.static(frontendDist));
   app.get("/{*splat}", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
