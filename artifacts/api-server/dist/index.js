@@ -830,10 +830,15 @@ function isUserOnline(userId) {
   return !!sockets && sockets.size > 0;
 }
 function initSocket(httpServer2) {
-  const ALLOWED_ORIGINS2 = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()) : null;
+  let allowedOrigins = null;
+  if (process.env.ALLOWED_ORIGINS) {
+    allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  } else if (process.env.REPLIT_DOMAINS) {
+    allowedOrigins = process.env.REPLIT_DOMAINS.split(",").map((d) => d.trim()).filter(Boolean).map((d) => d.startsWith("http") ? d : `https://${d}`);
+  }
   io = new import_socket.Server(httpServer2, {
     cors: {
-      origin: ALLOWED_ORIGINS2 ?? true,
+      origin: allowedOrigins ?? true,
       credentials: true
     },
     path: "/socket.io"
@@ -1600,6 +1605,60 @@ async function sendVerificationEmail(to, name, token, req) {
     logger.error({ err, to }, "Failed to send verification email");
   }
 }
+async function sendPasswordResetEmail(to, token, req) {
+  const narrowedReq = req ? { protocol: req.protocol, get: (h) => {
+    const v = req.get?.(h);
+    return Array.isArray(v) ? v[0] : v ?? "";
+  } } : void 0;
+  const baseUrl = getBaseUrl(narrowedReq);
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+  if (!resend) {
+    logger.info("Email provider not configured \u2014 password reset email not sent. Set RESEND_API_KEY to enable.");
+    return;
+  }
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:40px 20px">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+        <tr>
+          <td style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:32px 40px;text-align:center">
+            <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;margin-bottom:12px">S</div>
+            <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">SkillMarket AI</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px">
+            <h2 style="margin:0 0 8px;color:#111827;font-size:20px;font-weight:700">Reset your password</h2>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">We received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+            <div style="text-align:center;margin:32px 0">
+              <a href="${resetUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:.01em">Reset my password</a>
+            </div>
+            <p style="margin:0 0 8px;color:#6b7280;font-size:13px">Or copy this link into your browser:</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:10px 14px;border-radius:8px">${resetUrl}</p>
+            <p style="margin:0;color:#9ca3af;font-size:12px;border-top:1px solid #f3f4f6;padding-top:20px">If you didn't request a password reset, you can safely ignore this email. Your password will not change.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: "Reset your SkillMarket AI password",
+      html
+    });
+    logger.info({ to }, "Password reset email sent");
+  } catch (err) {
+    logger.error({ err, to }, "Failed to send password reset email");
+  }
+}
 
 // src/routes/auth.ts
 var import_express_rate_limit = __toESM(require("express-rate-limit"));
@@ -1676,7 +1735,7 @@ router.post("/login", async (req, res) => {
   setTokenCookie(res, token);
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, role: user.role, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt }
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, isAdmin: user.isAdmin, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt }
   });
 });
 router.post("/logout", (_req, res) => {
@@ -1741,7 +1800,7 @@ router.get("/me", requireAuth, async (req, res) => {
     res.status(401).json({ error: "User not found" });
     return;
   }
-  res.json({ id: user.id, email: user.email, name: user.name, role: user.role, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt });
+  res.json({ id: user.id, email: user.email, name: user.name, role: user.role, isAdmin: user.isAdmin, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt });
 });
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
@@ -1758,7 +1817,8 @@ router.post("/forgot-password", async (req, res) => {
   const token = import_crypto.default.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 60 * 60 * 1e3);
   await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
-  res.json({ token, message: "Reset link generated." });
+  await sendPasswordResetEmail(user.email, token, req);
+  res.json({ message: "If that email is registered, a reset link has been sent." });
 });
 router.get("/verify-reset-token/:token", async (req, res) => {
   const { token } = req.params;
@@ -3125,8 +3185,37 @@ var PROFICIENCY_WEIGHT = {
 function proficiencyLabel(weight) {
   return Object.entries(PROFICIENCY_WEIGHT).find(([, v]) => v === weight)?.[0] ?? "intermediate";
 }
+function buildProjectTerms(category, requiredSkills) {
+  const categoryWords = (category ?? "").toLowerCase().split(/[\s,/&+\-_]+/).filter((w) => w.length > 2);
+  const skillWords = requiredSkills.map((s) => s.toLowerCase().trim());
+  return [.../* @__PURE__ */ new Set([...categoryWords, ...skillWords])];
+}
+function textRelevanceRatio(text19, terms) {
+  if (!text19 || terms.length === 0) return 0;
+  const lower = text19.toLowerCase();
+  const hits = terms.filter((t) => lower.includes(t)).length;
+  return hits / terms.length;
+}
+function effectiveHourlyBudget(budgetMax, timelineWeeks) {
+  if (budgetMax <= 0) return 0;
+  const hours = timelineWeeks && timelineWeeks > 0 ? timelineWeeks * 40 : 40;
+  return budgetMax / hours;
+}
 function scoreFreelancerForProject(opts) {
-  const { freelancerSkills, requiredSkills, averageRating, completedProjects, availabilityStatus, hourlyRate, budgetMin, budgetMax } = opts;
+  const {
+    freelancerSkills,
+    headline,
+    bio,
+    requiredSkills,
+    category,
+    averageRating,
+    completedProjects,
+    availabilityStatus,
+    hourlyRate,
+    budgetMin,
+    budgetMax,
+    timelineWeeks
+  } = opts;
   const reasons = [];
   const skillMap = new Map(
     freelancerSkills.map((s) => [s.name.toLowerCase(), PROFICIENCY_WEIGHT[s.proficiencyLevel] ?? 0.5])
@@ -3137,27 +3226,38 @@ function scoreFreelancerForProject(opts) {
     const matched = required.filter((r) => skillMap.has(r));
     if (matched.length === 0) return { score: 0, reasons: [] };
     const weightedMatch = matched.reduce((sum, r) => sum + (skillMap.get(r) ?? 0.5), 0);
-    const maxWeight = required.length;
-    skillScore = Math.round(weightedMatch / maxWeight * 50);
-    const matchedLabels = matched.map((r) => {
-      const w = skillMap.get(r) ?? 0.5;
-      return `${r} (${proficiencyLabel(w)})`;
-    });
+    skillScore = Math.round(weightedMatch / required.length * 45);
+    const matchedLabels = matched.map((r) => `${r} (${proficiencyLabel(skillMap.get(r) ?? 0.5)})`);
     reasons.push(`Skills: ${matchedLabels.join(", ")}`);
     if (matched.length < required.length) {
       reasons.push(`${matched.length}/${required.length} required skills matched`);
     }
   } else {
-    skillScore = 40;
+    skillScore = 36;
     reasons.push("No specific skills required");
   }
-  let ratingScore = 10;
+  const terms = buildProjectTerms(category, required);
+  let textScore = 0;
+  if (terms.length > 0) {
+    const headlineRatio = textRelevanceRatio(headline ?? "", terms);
+    const bioRatio = textRelevanceRatio(bio ?? "", terms);
+    const headlinePts = Math.round(headlineRatio * 8);
+    const bioPts = Math.round(bioRatio * 7);
+    textScore = headlinePts + bioPts;
+    if (headlinePts > 0) {
+      reasons.push(`Headline matches: ${category || requiredSkills.slice(0, 2).join(", ")}`);
+    }
+    if (bioPts > 0) {
+      reasons.push("Bio highlights relevant experience");
+    }
+  }
+  let ratingScore = 8;
   if (averageRating !== null && averageRating > 0) {
-    ratingScore = Math.round(averageRating / 5 * 20);
+    ratingScore = Math.round(averageRating / 5 * 15);
     reasons.push(`${averageRating.toFixed(1)}\u2605 rating`);
   }
   const capAt = 15;
-  const completedScore = Math.round(Math.min(completedProjects, capAt) / capAt * 15);
+  const completedScore = Math.round(Math.min(completedProjects, capAt) / capAt * 10);
   if (completedProjects > 0) {
     reasons.push(`${completedProjects} completed project${completedProjects !== 1 ? "s" : ""}`);
   }
@@ -3170,22 +3270,31 @@ function scoreFreelancerForProject(opts) {
     reasons.push("Currently busy");
   }
   let rateScore = 0;
-  if (budgetMax > 0) {
-    const effectiveBudgetPerHr = budgetMax / 40;
-    if (hourlyRate <= budgetMax && hourlyRate >= budgetMin * 0.5) {
+  const budgetPerHr = effectiveHourlyBudget(budgetMax, timelineWeeks);
+  const budgetPerHrMin = effectiveHourlyBudget(budgetMin, timelineWeeks);
+  if (budgetPerHr > 0) {
+    if (hourlyRate <= budgetPerHr && hourlyRate >= budgetPerHrMin * 0.5) {
       rateScore = 5;
       reasons.push(`Rate fits budget (\u20A6${hourlyRate}/hr)`);
-    } else if (hourlyRate <= budgetMax * 1.2) {
+    } else if (hourlyRate <= budgetPerHr * 1.2) {
       rateScore = 2;
       reasons.push(`Rate close to budget (\u20A6${hourlyRate}/hr)`);
     }
-    void effectiveBudgetPerHr;
   }
-  const score = Math.min(100, skillScore + ratingScore + completedScore + availScore + rateScore);
+  const score = Math.min(100, skillScore + textScore + ratingScore + completedScore + availScore + rateScore);
   return { score, reasons };
 }
 function scoreProjectForFreelancer(opts) {
-  const { freelancerSkills, freelancerCompletedProjects, freelancerRating, freelancerAvailability, freelancerHourlyRate, project } = opts;
+  const {
+    freelancerSkills,
+    freelancerHeadline,
+    freelancerBio,
+    freelancerCompletedProjects,
+    freelancerRating,
+    freelancerAvailability,
+    freelancerHourlyRate,
+    project
+  } = opts;
   const reasons = [];
   const required = (project.requiredSkills ?? []).map((s) => s.toLowerCase().trim());
   let skillScore = 0;
@@ -3193,25 +3302,37 @@ function scoreProjectForFreelancer(opts) {
     const matched = required.filter((r) => freelancerSkills.has(r));
     if (matched.length === 0) return { score: 0, reasons: [] };
     const weightedMatch = matched.reduce((sum, r) => sum + (freelancerSkills.get(r) ?? 0.5), 0);
-    skillScore = Math.round(weightedMatch / required.length * 50);
-    const matchedLabels = matched.map((r) => {
-      const w = freelancerSkills.get(r) ?? 0.5;
-      return `${r} (${proficiencyLabel(w)})`;
-    });
+    skillScore = Math.round(weightedMatch / required.length * 45);
+    const matchedLabels = matched.map((r) => `${r} (${proficiencyLabel(freelancerSkills.get(r) ?? 0.5)})`);
     reasons.push(`Skills: ${matchedLabels.join(", ")}`);
     if (matched.length < required.length) {
       reasons.push(`${matched.length}/${required.length} required skills matched`);
     }
   } else {
-    skillScore = 40;
+    skillScore = 36;
   }
-  let ratingScore = 10;
+  const terms = buildProjectTerms(project.category, required);
+  let textScore = 0;
+  if (terms.length > 0) {
+    const headlineRatio = textRelevanceRatio(freelancerHeadline ?? "", terms);
+    const bioRatio = textRelevanceRatio(freelancerBio ?? "", terms);
+    const headlinePts = Math.round(headlineRatio * 8);
+    const bioPts = Math.round(bioRatio * 7);
+    textScore = headlinePts + bioPts;
+    if (headlinePts > 0) {
+      reasons.push(`Headline matches: ${project.category || required.slice(0, 2).join(", ")}`);
+    }
+    if (bioPts > 0) {
+      reasons.push("Bio highlights relevant experience");
+    }
+  }
+  let ratingScore = 8;
   if (freelancerRating !== null && freelancerRating > 0) {
-    ratingScore = Math.round(freelancerRating / 5 * 20);
+    ratingScore = Math.round(freelancerRating / 5 * 15);
     reasons.push(`${freelancerRating.toFixed(1)}\u2605 rating`);
   }
   const capAt = 15;
-  const completedScore = Math.round(Math.min(freelancerCompletedProjects, capAt) / capAt * 15);
+  const completedScore = Math.round(Math.min(freelancerCompletedProjects, capAt) / capAt * 10);
   if (freelancerCompletedProjects > 0) {
     reasons.push(`${freelancerCompletedProjects} completed project${freelancerCompletedProjects !== 1 ? "s" : ""}`);
   }
@@ -3224,14 +3345,15 @@ function scoreProjectForFreelancer(opts) {
     reasons.push("Currently busy");
   }
   let rateScore = 0;
-  if (project.budgetMax > 0 && freelancerHourlyRate <= project.budgetMax) {
+  const budgetPerHr = effectiveHourlyBudget(project.budgetMax, project.timelineWeeks);
+  if (budgetPerHr > 0 && freelancerHourlyRate <= budgetPerHr) {
     rateScore = 5;
     reasons.push(`Rate fits budget (\u20A6${freelancerHourlyRate}/hr)`);
-  } else if (project.budgetMax > 0 && freelancerHourlyRate <= project.budgetMax * 1.3) {
+  } else if (budgetPerHr > 0 && freelancerHourlyRate <= budgetPerHr * 1.3) {
     rateScore = 2;
     reasons.push(`Rate close to budget (\u20A6${freelancerHourlyRate}/hr)`);
   }
-  const score = Math.min(100, skillScore + ratingScore + completedScore + availScore + rateScore);
+  const score = Math.min(100, skillScore + textScore + ratingScore + completedScore + availScore + rateScore);
   return { score, reasons };
 }
 router9.get("/freelancer", requireAuth, requireRole("freelancer"), async (req, res) => {
@@ -3326,11 +3448,19 @@ router9.get("/ai-recommendations", requireAuth, requireRole("freelancer"), async
   const scored = openProjects.filter((r) => !appliedProjectIds.has(r.project.id)).map((r) => {
     const { score, reasons } = scoreProjectForFreelancer({
       freelancerSkills: skillMap,
+      freelancerHeadline: profile.headline,
+      freelancerBio: profile.bio,
       freelancerCompletedProjects: profile.completedProjects,
       freelancerRating: profile.averageRating,
       freelancerAvailability: profile.availabilityStatus,
       freelancerHourlyRate: profile.hourlyRate,
-      project: r.project
+      project: {
+        requiredSkills: r.project.requiredSkills ?? [],
+        budgetMin: r.project.budgetMin,
+        budgetMax: r.project.budgetMax,
+        category: r.project.category ?? "",
+        timelineWeeks: r.project.timelineWeeks ?? null
+      }
     });
     if (score === 0) return null;
     return {
@@ -3387,16 +3517,19 @@ router9.get("/ai-freelancers", requireAuth, requireRole("client"), async (req, r
     const required = (project.requiredSkills ?? []).map((s) => s.toLowerCase().trim());
     const scored = relevantFreelancers.map((f) => {
       const fSkills = skillsByProfile.get(f.profile.id) ?? [];
-      const fSkillMap = new Map(fSkills.map((s) => [s.name.toLowerCase(), PROFICIENCY_WEIGHT[s.proficiencyLevel] ?? 0.5]));
       const { score, reasons } = scoreFreelancerForProject({
         freelancerSkills: fSkills,
+        headline: f.profile.headline,
+        bio: f.profile.bio,
         requiredSkills: required,
+        category: project.category ?? "",
         averageRating: f.profile.averageRating,
         completedProjects: f.profile.completedProjects,
         availabilityStatus: f.profile.availabilityStatus,
         hourlyRate: f.profile.hourlyRate,
         budgetMin: project.budgetMin,
-        budgetMax: project.budgetMax
+        budgetMax: project.budgetMax,
+        timelineWeeks: project.timelineWeeks ?? null
       });
       if (score === 0) return null;
       return {
@@ -4830,7 +4963,16 @@ if (!process.env.JWT_SECRET) {
 var app = (0, import_express20.default)();
 var PORT = parseInt(process.env.PORT ?? "8080", 10);
 app.set("trust proxy", 1);
-var ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()) : null;
+function resolveAllowedOrigins() {
+  if (process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  }
+  if (process.env.REPLIT_DOMAINS) {
+    return process.env.REPLIT_DOMAINS.split(",").map((d) => d.trim()).filter(Boolean).map((d) => d.startsWith("http") ? d : `https://${d}`);
+  }
+  return null;
+}
+var ALLOWED_ORIGINS = resolveAllowedOrigins();
 app.use(
   (0, import_cors.default)({
     origin: (origin, callback) => {
@@ -4902,6 +5044,9 @@ app.get("/api/presence", (req, res) => {
   for (const id of ids) result[id] = isUserOnline(id);
   res.json(result);
 });
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+}
 app.get("/og/project/:id", async (req, res) => {
   try {
     const { db: db2, projectsTable: projectsTable2, usersTable: usersTable2 } = await Promise.resolve().then(() => (init_src(), src_exports));
@@ -4917,10 +5062,12 @@ app.get("/og/project/:id", async (req, res) => {
       return;
     }
     const [client] = await db2.select({ name: usersTable2.name }).from(usersTable2).where(eq18(usersTable2.id, project.clientId));
-    const title = `${project.title} \u2014 SkillMarket AI`;
-    const desc3 = project.description.slice(0, 200);
-    const url = `${req.protocol}://${req.get("host")}/projects/${id}`;
-    res.setHeader("Content-Type", "text/html");
+    const title = escapeHtml(`${project.title} \u2014 SkillMarket AI`);
+    const desc3 = escapeHtml(project.description.slice(0, 200));
+    const safeId = id;
+    const url = escapeHtml(`${req.protocol}://${req.get("host")}/projects/${safeId}`);
+    const authorName = escapeHtml(client?.name ?? "SkillMarket AI");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`<!DOCTYPE html><html><head>
       <title>${title}</title>
       <meta name="description" content="${desc3}">
@@ -4932,9 +5079,9 @@ app.get("/og/project/:id", async (req, res) => {
       <meta name="twitter:card" content="summary">
       <meta name="twitter:title" content="${title}">
       <meta name="twitter:description" content="${desc3}">
-      <meta name="author" content="${client?.name ?? "SkillMarket AI"}">
+      <meta name="author" content="${authorName}">
       <link rel="canonical" href="${url}">
-      <script>window.location.href="${url}"</script>
+      <meta http-equiv="refresh" content="0; url=${url}">
     </head><body>Redirecting to <a href="${url}">${title}</a></body></html>`);
   } catch (err) {
     logger.error(err);

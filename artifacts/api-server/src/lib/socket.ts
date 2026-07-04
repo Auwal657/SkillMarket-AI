@@ -20,21 +20,23 @@ export function isUserOnline(userId: number): boolean {
 }
 
 export function initSocket(httpServer: HttpServer) {
-  const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-    : null;
-  const IS_PRODUCTION = process.env.NODE_ENV === "production";
-
-  // In production, require an explicit origin allow-list — same policy as HTTP CORS
-  if (IS_PRODUCTION && !ALLOWED_ORIGINS) {
-    logger.error("FATAL: ALLOWED_ORIGINS must be set in production for Socket.IO CORS.");
-    process.exit(1);
+  // Resolution order:
+  //   1. ALLOWED_ORIGINS env var (explicit, comma-separated)
+  //   2. REPLIT_DOMAINS (auto-set by Replit on every deployment)
+  //   3. null → allow all origins (safe for local / dev)
+  let allowedOrigins: string[] | null = null;
+  if (process.env.ALLOWED_ORIGINS) {
+    allowedOrigins = process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  } else if (process.env.REPLIT_DOMAINS) {
+    allowedOrigins = process.env.REPLIT_DOMAINS.split(",")
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .map((d) => (d.startsWith("http") ? d : `https://${d}`));
   }
 
   io = new SocketIOServer(httpServer, {
     cors: {
-      // Development: allow all origins. Production: only allow-listed origins.
-      origin: ALLOWED_ORIGINS ?? true,
+      origin: allowedOrigins ?? true,
       credentials: true,
     },
     path: "/socket.io",

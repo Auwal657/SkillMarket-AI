@@ -41,24 +41,34 @@ const PORT = parseInt(process.env.PORT ?? "8080", 10);
 app.set("trust proxy", 1);
 
 // S3: Restrict CORS to known origins; reflect any origin in development only
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : null;
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
+// Resolution order:
+//   1. ALLOWED_ORIGINS env var (explicit, comma-separated)
+//   2. REPLIT_DOMAINS (auto-set by Replit on every deployment — used in production)
+//   3. null → allow all origins (safe for local / dev)
+function resolveAllowedOrigins(): string[] | null {
+  if (process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  }
+  if (process.env.REPLIT_DOMAINS) {
+    return process.env.REPLIT_DOMAINS.split(",")
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .map((d) => (d.startsWith("http") ? d : `https://${d}`));
+  }
+  return null;
+}
+
+const ALLOWED_ORIGINS = resolveAllowedOrigins();
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow same-origin requests (no Origin header) and non-browser clients
       if (!origin) return callback(null, true);
-      // In production, require an explicit allow-list — deny unknown origins
-      if (IS_PRODUCTION && !ALLOWED_ORIGINS) {
-        return callback(new Error("ALLOWED_ORIGINS must be set in production"), false);
-      }
       if (ALLOWED_ORIGINS) {
         return callback(null, ALLOWED_ORIGINS.includes(origin));
       }
-      // In development (no ALLOWED_ORIGINS set), allow any origin
+      // No allow-list resolved — allow any origin (development / local)
       return callback(null, true);
     },
     credentials: true,
