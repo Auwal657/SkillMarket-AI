@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Bell, MessageCircle, Bookmark, Menu, X, ChevronDown, LogOut, LayoutDashboard, User, Wallet, Plus, FileText, Zap } from "lucide-react";
+import { Bell, MessageCircle, Bookmark, Menu, X, ChevronDown, LogOut, LayoutDashboard, User, Wallet, Plus, FileText, Zap, Shield } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Avatar from "../common/Avatar";
 import { cn } from "../../lib/utils";
@@ -169,12 +169,18 @@ export default function Navbar() {
                       <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg shadow-gray-200/80 border border-gray-100 py-1 z-50 animate-scale-in">
                         <div className="px-4 py-3 border-b border-gray-100 mb-1">
                           <p className="font-semibold text-sm text-gray-900 truncate">{user.name}</p>
-                          <p className="text-xs text-gray-500 capitalize mt-0.5">{user.role}</p>
+                          <p className="text-xs text-gray-500 capitalize mt-0.5">{user.isAdmin ? "Super Admin" : user.role}</p>
                         </div>
                         <div className="p-1">
-                          <Link href={dashboardHref} className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600 rounded-lg transition-colors" onClick={() => setUserMenuOpen(false)}>
-                            <LayoutDashboard size={16} /> Dashboard
-                          </Link>
+                          {user.isAdmin ? (
+                            <Link href="/admin" className="flex items-center gap-2.5 px-3 py-2 text-sm text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors font-medium" onClick={() => setUserMenuOpen(false)}>
+                              <Shield size={16} /> Admin Dashboard
+                            </Link>
+                          ) : (
+                            <Link href={dashboardHref} className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600 rounded-lg transition-colors" onClick={() => setUserMenuOpen(false)}>
+                              <LayoutDashboard size={16} /> Dashboard
+                            </Link>
+                          )}
                           <Link href="/profile/edit" className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600 rounded-lg transition-colors" onClick={() => setUserMenuOpen(false)}>
                             <User size={16} /> Edit Profile
                           </Link>
@@ -254,7 +260,7 @@ export default function Navbar() {
                 <Avatar name={user.name} avatarUrl={user.avatarUrl} size="md" />
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 truncate text-sm">{user.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                  <p className="text-xs text-gray-500 capitalize">{user.isAdmin ? "Super Admin" : user.role}</p>
                 </div>
               </div>
             )}
@@ -284,13 +290,23 @@ export default function Navbar() {
                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-2 pb-1">My Account</p>
                   </div>
 
-                  <Link href={dashboardHref} onClick={closeMobile} className={cn(
-                    "mobile-nav-item",
-                    isActive(dashboardHref) ? "bg-indigo-50 text-indigo-700" : "text-gray-700 hover:bg-gray-100"
-                  )}>
-                    <LayoutDashboard size={18} className="flex-shrink-0" />
-                    Dashboard
-                  </Link>
+                  {user.isAdmin ? (
+                    <Link href="/admin" onClick={closeMobile} className={cn(
+                      "mobile-nav-item font-medium",
+                      isActive("/admin") ? "bg-indigo-50 text-indigo-700" : "text-indigo-700 hover:bg-indigo-50"
+                    )}>
+                      <Shield size={18} className="flex-shrink-0" />
+                      Admin Dashboard
+                    </Link>
+                  ) : (
+                    <Link href={dashboardHref} onClick={closeMobile} className={cn(
+                      "mobile-nav-item",
+                      isActive(dashboardHref) ? "bg-indigo-50 text-indigo-700" : "text-gray-700 hover:bg-gray-100"
+                    )}>
+                      <LayoutDashboard size={18} className="flex-shrink-0" />
+                      Dashboard
+                    </Link>
+                  )}
 
                   <Link href="/messages" onClick={closeMobile} className={cn(
                     "mobile-nav-item",

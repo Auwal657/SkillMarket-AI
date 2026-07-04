@@ -6,6 +6,7 @@ interface AuthUser {
   email: string;
   name: string;
   role: "freelancer" | "client";
+  isAdmin?: boolean;
   university?: string | null;
   avatarUrl?: string | null;
   emailVerified?: boolean;

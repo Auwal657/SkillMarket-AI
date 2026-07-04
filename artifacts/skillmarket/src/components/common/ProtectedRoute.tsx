@@ -5,9 +5,10 @@ import { useAuth } from "../../contexts/AuthContext";
 interface Props {
   children: ReactNode;
   role?: "freelancer" | "client";
+  adminOnly?: boolean;
 }
 
-export default function ProtectedRoute({ children, role }: Props) {
+export default function ProtectedRoute({ children, role, adminOnly }: Props) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -19,6 +20,7 @@ export default function ProtectedRoute({ children, role }: Props) {
   }
 
   if (!user) return <Redirect to="/login" />;
+  if (adminOnly && !user.isAdmin) return <Redirect to="/" />;
   if (role && user.role !== role) return <Redirect to="/" />;
 
   return <>{children}</>;

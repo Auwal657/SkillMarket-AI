@@ -136,7 +136,7 @@ export default function App() {
               </ProtectedRoute>
             </Route>
             <Route path="/admin">
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly>
                 <AdminDashboard />
               </ProtectedRoute>
             </Route>
