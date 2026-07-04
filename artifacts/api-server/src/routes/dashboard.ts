@@ -22,20 +22,69 @@ function proficiencyLabel(weight: number): string {
 }
 
 /**
- * Score a freelancer against a set of required skills + other signals.
- * Returns 0–100 and an array of human-readable reasons.
+ * Build a normalised set of search terms from project category + required skills.
+ * Used for headline/bio text relevance scoring.
+ */
+function buildProjectTerms(category: string, requiredSkills: string[]): string[] {
+  const categoryWords = (category ?? "")
+    .toLowerCase()
+    .split(/[\s,/&+\-_]+/)
+    .filter(w => w.length > 2);
+  const skillWords = requiredSkills.map(s => s.toLowerCase().trim());
+  return [...new Set([...categoryWords, ...skillWords])];
+}
+
+/**
+ * Score how many project terms appear in a text string (0–1 ratio).
+ */
+function textRelevanceRatio(text: string, terms: string[]): number {
+  if (!text || terms.length === 0) return 0;
+  const lower = text.toLowerCase();
+  const hits = terms.filter(t => lower.includes(t)).length;
+  return hits / terms.length;
+}
+
+/**
+ * Compute the effective hourly budget from project totals.
+ * Uses timelineWeeks * 40 hrs/week to convert total budget → hourly.
+ * Falls back to assuming 40 hours if timeline is missing.
+ */
+function effectiveHourlyBudget(budgetMax: number, timelineWeeks: number | null): number {
+  if (budgetMax <= 0) return 0;
+  const hours = (timelineWeeks && timelineWeeks > 0) ? timelineWeeks * 40 : 40;
+  return budgetMax / hours;
+}
+
+/**
+ * Score a freelancer against a project.
+ * Signals (total 100 pts):
+ *   45 — skill match (weighted by proficiency)
+ *   15 — text relevance: category + headline + bio
+ *   15 — average rating
+ *   10 — completed projects
+ *   10 — availability status
+ *    5 — hourly rate vs estimated budget/hr
  */
 function scoreFreelancerForProject(opts: {
   freelancerSkills: Array<{ name: string; proficiencyLevel: string }>;
+  headline: string | null;
+  bio: string | null;
   requiredSkills: string[];
+  category: string;
   averageRating: number | null;
   completedProjects: number;
   availabilityStatus: string;
   hourlyRate: number;
   budgetMin: number;
   budgetMax: number;
+  timelineWeeks: number | null;
 }): { score: number; reasons: string[] } {
-  const { freelancerSkills, requiredSkills, averageRating, completedProjects, availabilityStatus, hourlyRate, budgetMin, budgetMax } = opts;
+  const {
+    freelancerSkills, headline, bio,
+    requiredSkills, category,
+    averageRating, completedProjects, availabilityStatus,
+    hourlyRate, budgetMin, budgetMax, timelineWeeks,
+  } = opts;
   const reasons: string[] = [];
 
   const skillMap = new Map(
@@ -43,42 +92,56 @@ function scoreFreelancerForProject(opts: {
   );
   const required = requiredSkills.map(s => s.toLowerCase().trim());
 
-  // Skill score — 50 pts
+  // ── Skill score — 45 pts ─────────────────────────────────────────────────
   let skillScore = 0;
   if (required.length > 0) {
     const matched = required.filter(r => skillMap.has(r));
     if (matched.length === 0) return { score: 0, reasons: [] }; // must match at least one skill
     const weightedMatch = matched.reduce((sum, r) => sum + (skillMap.get(r) ?? 0.5), 0);
-    const maxWeight = required.length; // full weight per skill if expert
-    skillScore = Math.round((weightedMatch / maxWeight) * 50);
-    const matchedLabels = matched.map(r => {
-      const w = skillMap.get(r) ?? 0.5;
-      return `${r} (${proficiencyLabel(w)})`;
-    });
+    skillScore = Math.round((weightedMatch / required.length) * 45);
+    const matchedLabels = matched.map(r => `${r} (${proficiencyLabel(skillMap.get(r) ?? 0.5)})`);
     reasons.push(`Skills: ${matchedLabels.join(", ")}`);
     if (matched.length < required.length) {
       reasons.push(`${matched.length}/${required.length} required skills matched`);
     }
   } else {
-    skillScore = 40; // no skills specified — partial credit
+    skillScore = 36; // no skills specified — 80% partial credit
     reasons.push("No specific skills required");
   }
 
-  // Rating score — 20 pts
-  let ratingScore = 10; // default for no reviews
+  // ── Text relevance: category + headline + bio — 15 pts ───────────────────
+  const terms = buildProjectTerms(category, required);
+  let textScore = 0;
+  if (terms.length > 0) {
+    const headlineRatio = textRelevanceRatio(headline ?? "", terms);
+    const bioRatio = textRelevanceRatio(bio ?? "", terms);
+    // headline is more concise/intentional → 8 pts, bio → 7 pts
+    const headlinePts = Math.round(headlineRatio * 8);
+    const bioPts = Math.round(bioRatio * 7);
+    textScore = headlinePts + bioPts;
+    if (headlinePts > 0) {
+      reasons.push(`Headline matches: ${category || requiredSkills.slice(0, 2).join(", ")}`);
+    }
+    if (bioPts > 0) {
+      reasons.push("Bio highlights relevant experience");
+    }
+  }
+
+  // ── Rating score — 15 pts ────────────────────────────────────────────────
+  let ratingScore = 8; // default for no reviews
   if (averageRating !== null && averageRating > 0) {
-    ratingScore = Math.round((averageRating / 5) * 20);
+    ratingScore = Math.round((averageRating / 5) * 15);
     reasons.push(`${averageRating.toFixed(1)}★ rating`);
   }
 
-  // Completed projects score — 15 pts (capped at 15 completed = full score)
+  // ── Completed projects — 10 pts (capped at 15 = full score) ─────────────
   const capAt = 15;
-  const completedScore = Math.round(Math.min(completedProjects, capAt) / capAt * 15);
+  const completedScore = Math.round(Math.min(completedProjects, capAt) / capAt * 10);
   if (completedProjects > 0) {
     reasons.push(`${completedProjects} completed project${completedProjects !== 1 ? "s" : ""}`);
   }
 
-  // Availability score — 10 pts
+  // ── Availability — 10 pts ────────────────────────────────────────────────
   let availScore = 0;
   if (availabilityStatus === "available") {
     availScore = 10;
@@ -88,29 +151,32 @@ function scoreFreelancerForProject(opts: {
     reasons.push("Currently busy");
   }
 
-  // Rate fit score — 5 pts
+  // ── Rate fit — 5 pts (hourly rate vs estimated budget/hr) ────────────────
   let rateScore = 0;
-  if (budgetMax > 0) {
-    const effectiveBudgetPerHr = budgetMax / (40); // rough: budget/40hr week
-    if (hourlyRate <= budgetMax && hourlyRate >= budgetMin * 0.5) {
+  const budgetPerHr = effectiveHourlyBudget(budgetMax, timelineWeeks);
+  const budgetPerHrMin = effectiveHourlyBudget(budgetMin, timelineWeeks);
+  if (budgetPerHr > 0) {
+    if (hourlyRate <= budgetPerHr && hourlyRate >= budgetPerHrMin * 0.5) {
       rateScore = 5;
       reasons.push(`Rate fits budget (₦${hourlyRate}/hr)`);
-    } else if (hourlyRate <= budgetMax * 1.2) {
+    } else if (hourlyRate <= budgetPerHr * 1.2) {
       rateScore = 2;
       reasons.push(`Rate close to budget (₦${hourlyRate}/hr)`);
     }
-    void effectiveBudgetPerHr;
   }
 
-  const score = Math.min(100, skillScore + ratingScore + completedScore + availScore + rateScore);
+  const score = Math.min(100, skillScore + textScore + ratingScore + completedScore + availScore + rateScore);
   return { score, reasons };
 }
 
 /**
  * Score a project for a freelancer.
+ * Same signals as scoreFreelancerForProject, just inverted perspective.
  */
 function scoreProjectForFreelancer(opts: {
   freelancerSkills: Map<string, number>;
+  freelancerHeadline: string | null;
+  freelancerBio: string | null;
   freelancerCompletedProjects: number;
   freelancerRating: number | null;
   freelancerAvailability: string;
@@ -120,46 +186,65 @@ function scoreProjectForFreelancer(opts: {
     budgetMin: number;
     budgetMax: number;
     category: string;
+    timelineWeeks: number | null;
   };
 }): { score: number; reasons: string[] } {
-  const { freelancerSkills, freelancerCompletedProjects, freelancerRating, freelancerAvailability, freelancerHourlyRate, project } = opts;
+  const {
+    freelancerSkills, freelancerHeadline, freelancerBio,
+    freelancerCompletedProjects, freelancerRating,
+    freelancerAvailability, freelancerHourlyRate, project,
+  } = opts;
   const reasons: string[] = [];
   const required = (project.requiredSkills ?? []).map(s => s.toLowerCase().trim());
 
-  // Skill score — 50 pts
+  // ── Skill score — 45 pts ─────────────────────────────────────────────────
   let skillScore = 0;
   if (required.length > 0) {
     const matched = required.filter(r => freelancerSkills.has(r));
     if (matched.length === 0) return { score: 0, reasons: [] };
     const weightedMatch = matched.reduce((sum, r) => sum + (freelancerSkills.get(r) ?? 0.5), 0);
-    skillScore = Math.round((weightedMatch / required.length) * 50);
-    const matchedLabels = matched.map(r => {
-      const w = freelancerSkills.get(r) ?? 0.5;
-      return `${r} (${proficiencyLabel(w)})`;
-    });
+    skillScore = Math.round((weightedMatch / required.length) * 45);
+    const matchedLabels = matched.map(r => `${r} (${proficiencyLabel(freelancerSkills.get(r) ?? 0.5)})`);
     reasons.push(`Skills: ${matchedLabels.join(", ")}`);
     if (matched.length < required.length) {
       reasons.push(`${matched.length}/${required.length} required skills matched`);
     }
   } else {
-    skillScore = 40;
+    skillScore = 36;
   }
 
-  // Rating — 20 pts
-  let ratingScore = 10;
+  // ── Text relevance: category + headline + bio — 15 pts ───────────────────
+  const terms = buildProjectTerms(project.category, required);
+  let textScore = 0;
+  if (terms.length > 0) {
+    const headlineRatio = textRelevanceRatio(freelancerHeadline ?? "", terms);
+    const bioRatio = textRelevanceRatio(freelancerBio ?? "", terms);
+    const headlinePts = Math.round(headlineRatio * 8);
+    const bioPts = Math.round(bioRatio * 7);
+    textScore = headlinePts + bioPts;
+    if (headlinePts > 0) {
+      reasons.push(`Headline matches: ${project.category || required.slice(0, 2).join(", ")}`);
+    }
+    if (bioPts > 0) {
+      reasons.push("Bio highlights relevant experience");
+    }
+  }
+
+  // ── Rating — 15 pts ──────────────────────────────────────────────────────
+  let ratingScore = 8;
   if (freelancerRating !== null && freelancerRating > 0) {
-    ratingScore = Math.round((freelancerRating / 5) * 20);
+    ratingScore = Math.round((freelancerRating / 5) * 15);
     reasons.push(`${freelancerRating.toFixed(1)}★ rating`);
   }
 
-  // Completed projects — 15 pts
+  // ── Completed projects — 10 pts ──────────────────────────────────────────
   const capAt = 15;
-  const completedScore = Math.round(Math.min(freelancerCompletedProjects, capAt) / capAt * 15);
+  const completedScore = Math.round(Math.min(freelancerCompletedProjects, capAt) / capAt * 10);
   if (freelancerCompletedProjects > 0) {
     reasons.push(`${freelancerCompletedProjects} completed project${freelancerCompletedProjects !== 1 ? "s" : ""}`);
   }
 
-  // Availability — 10 pts
+  // ── Availability — 10 pts ────────────────────────────────────────────────
   let availScore = 0;
   if (freelancerAvailability === "available") {
     availScore = 10;
@@ -169,17 +254,18 @@ function scoreProjectForFreelancer(opts: {
     reasons.push("Currently busy");
   }
 
-  // Rate fit — 5 pts
+  // ── Rate fit — 5 pts ─────────────────────────────────────────────────────
   let rateScore = 0;
-  if (project.budgetMax > 0 && freelancerHourlyRate <= project.budgetMax) {
+  const budgetPerHr = effectiveHourlyBudget(project.budgetMax, project.timelineWeeks);
+  if (budgetPerHr > 0 && freelancerHourlyRate <= budgetPerHr) {
     rateScore = 5;
     reasons.push(`Rate fits budget (₦${freelancerHourlyRate}/hr)`);
-  } else if (project.budgetMax > 0 && freelancerHourlyRate <= project.budgetMax * 1.3) {
+  } else if (budgetPerHr > 0 && freelancerHourlyRate <= budgetPerHr * 1.3) {
     rateScore = 2;
     reasons.push(`Rate close to budget (₦${freelancerHourlyRate}/hr)`);
   }
 
-  const score = Math.min(100, skillScore + ratingScore + completedScore + availScore + rateScore);
+  const score = Math.min(100, skillScore + textScore + ratingScore + completedScore + availScore + rateScore);
   return { score, reasons };
 }
 
@@ -320,11 +406,19 @@ router.get("/ai-recommendations", requireAuth, requireRole("freelancer"), async 
     .map(r => {
       const { score, reasons } = scoreProjectForFreelancer({
         freelancerSkills: skillMap,
+        freelancerHeadline: profile.headline,
+        freelancerBio: profile.bio,
         freelancerCompletedProjects: profile.completedProjects,
         freelancerRating: profile.averageRating,
         freelancerAvailability: profile.availabilityStatus,
         freelancerHourlyRate: profile.hourlyRate,
-        project: r.project,
+        project: {
+          requiredSkills: r.project.requiredSkills ?? [],
+          budgetMin: r.project.budgetMin,
+          budgetMax: r.project.budgetMax,
+          category: r.project.category ?? "",
+          timelineWeeks: r.project.timelineWeeks ?? null,
+        },
       });
       if (score === 0) return null;
 
@@ -408,17 +502,20 @@ router.get("/ai-freelancers", requireAuth, requireRole("client"), async (req, re
 
     const scored = relevantFreelancers.map(f => {
       const fSkills = skillsByProfile.get(f.profile.id) ?? [];
-      const fSkillMap = new Map(fSkills.map(s => [s.name.toLowerCase(), PROFICIENCY_WEIGHT[s.proficiencyLevel] ?? 0.5]));
 
       const { score, reasons } = scoreFreelancerForProject({
         freelancerSkills: fSkills,
+        headline: f.profile.headline,
+        bio: f.profile.bio,
         requiredSkills: required,
+        category: project.category ?? "",
         averageRating: f.profile.averageRating,
         completedProjects: f.profile.completedProjects,
         availabilityStatus: f.profile.availabilityStatus,
         hourlyRate: f.profile.hourlyRate,
         budgetMin: project.budgetMin,
         budgetMax: project.budgetMax,
+        timelineWeeks: project.timelineWeeks ?? null,
       });
       if (score === 0) return null;
 
