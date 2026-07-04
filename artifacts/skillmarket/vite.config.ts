@@ -2,15 +2,22 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorModal from "@replit/vite-plugin-runtime-error-modal";
-import { cartographer } from "@replit/vite-plugin-cartographer";
 
-export default defineConfig({
+const isDev = process.env.NODE_ENV !== "production";
+
+export default defineConfig(async () => {
+  const devPlugins = isDev
+    ? [
+        (await import("@replit/vite-plugin-runtime-error-modal")).default(),
+        (await import("@replit/vite-plugin-cartographer")).cartographer(),
+      ]
+    : [];
+
+  return {
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorModal(),
-    cartographer(),
+    ...devPlugins,
   ],
   resolve: {
     alias: {
@@ -33,4 +40,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });

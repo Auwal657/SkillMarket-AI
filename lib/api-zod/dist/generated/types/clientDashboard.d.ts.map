@@ -1,1 +1,0 @@
-{"version":3,"file":"clientDashboard.d.ts","sourceRoot":"","sources":["../../../src/generated/types/clientDashboard.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAEzC,MAAM,WAAW,eAAe;IAC9B,mBAAmB,EAAE,MAAM,CAAC;IAC5B,YAAY,EAAE,MAAM,CAAC;IACrB,yBAAyB,EAAE,MAAM,CAAC;IAClC,UAAU,EAAE,MAAM,CAAC;IACnB,cAAc,EAAE,OAAO,EAAE,CAAC;CAC3B"}

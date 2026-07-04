@@ -1,0 +1,12 @@
+# Build artifacts — never commit compiled output; the deployment build step produces these
+**/dist/
+**/*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Local environment and cache
+.cache/
+.env
+.env.*
+!.env.example
