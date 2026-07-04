@@ -137,6 +137,16 @@ app.get("/api/presence", (req, res) => {
   res.json(result);
 });
 
+// Escape text for safe embedding in HTML attributes and text nodes
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 // Open Graph / SEO meta endpoint for project pages
 app.get("/og/project/:id", async (req, res) => {
   try {
@@ -147,10 +157,13 @@ app.get("/og/project/:id", async (req, res) => {
     const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
     if (!project) { res.status(404).send("Not found"); return; }
     const [client] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, project.clientId));
-    const title = `${project.title} — SkillMarket AI`;
-    const desc = project.description.slice(0, 200);
-    const url = `${req.protocol}://${req.get("host")}/projects/${id}`;
-    res.setHeader("Content-Type", "text/html");
+    const title = escapeHtml(`${project.title} — SkillMarket AI`);
+    const desc = escapeHtml(project.description.slice(0, 200));
+    // Build a safe redirect URL using only the numeric id (never interpolate host into JS)
+    const safeId = id; // already validated as integer above
+    const url = escapeHtml(`${req.protocol}://${req.get("host")}/projects/${safeId}`);
+    const authorName = escapeHtml(client?.name ?? "SkillMarket AI");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`<!DOCTYPE html><html><head>
       <title>${title}</title>
       <meta name="description" content="${desc}">
@@ -162,9 +175,9 @@ app.get("/og/project/:id", async (req, res) => {
       <meta name="twitter:card" content="summary">
       <meta name="twitter:title" content="${title}">
       <meta name="twitter:description" content="${desc}">
-      <meta name="author" content="${client?.name ?? "SkillMarket AI"}">
+      <meta name="author" content="${authorName}">
       <link rel="canonical" href="${url}">
-      <script>window.location.href="${url}"</script>
+      <meta http-equiv="refresh" content="0; url=${url}">
     </head><body>Redirecting to <a href="${url}">${title}</a></body></html>`);
   } catch (err) {
     logger.error(err);

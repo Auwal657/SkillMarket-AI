@@ -23,9 +23,17 @@ export function initSocket(httpServer: HttpServer) {
   const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
     : null;
+  const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+  // In production, require an explicit origin allow-list — same policy as HTTP CORS
+  if (IS_PRODUCTION && !ALLOWED_ORIGINS) {
+    logger.error("FATAL: ALLOWED_ORIGINS must be set in production for Socket.IO CORS.");
+    process.exit(1);
+  }
 
   io = new SocketIOServer(httpServer, {
     cors: {
+      // Development: allow all origins. Production: only allow-listed origins.
       origin: ALLOWED_ORIGINS ?? true,
       credentials: true,
     },
