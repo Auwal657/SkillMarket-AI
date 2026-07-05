@@ -47,6 +47,10 @@ args = "cd artifacts/skillmarket && pnpm dev"
 waitForPort = 5000
 
 [[ports]]
+localPort = 4999
+externalPort = 5173
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
