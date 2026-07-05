@@ -176,14 +176,21 @@ router.post("/verify", requireAuth, async (req, res) => {
   const [escrow] = await db.select().from(escrowTransactionsTable)
     .where(eq(escrowTransactionsTable.paystackReference, reference));
   if (!escrow) { res.status(404).json({ error: "Escrow transaction not found" }); return; }
-  if (escrow.clientId !== req.user!.userId && !req.user!.role) {
-    res.status(403).json({ error: "Forbidden" }); return;
+
+  // Only the client who owns this escrow may verify it (admins bypass via isAdmin flag in DB)
+  if (escrow.clientId !== req.user!.userId) {
+    const [caller] = await db.select({ isAdmin: usersTable.isAdmin }).from(usersTable)
+      .where(eq(usersTable.id, req.user!.userId));
+    if (!caller?.isAdmin) { res.status(403).json({ error: "Forbidden" }); return; }
   }
+
   if (["funded", "in_escrow", "released"].includes(escrow.status)) {
-    res.json({ message: "Escrow already funded", escrow }); return;
+    const [current] = await db.select().from(escrowTransactionsTable).where(eq(escrowTransactionsTable.id, escrow.id));
+    res.json({ message: "Escrow already funded", escrow: current }); return;
   }
 
   let verifiedAmount = parseFloat(String(escrow.amount));
+  let paystackTxId: string | null = null;
 
   if (!paystackEnabled) {
     // Dev mode: simulate verification
@@ -204,16 +211,22 @@ router.post("/verify", requireAuth, async (req, res) => {
       res.status(400).json({ error: `Payment not successful: ${verification.gateway_response}` }); return;
     }
     verifiedAmount = verification.amount / 100; // convert from kobo
-
-    await db.update(escrowTransactionsTable)
-      .set({ paystackTransactionId: String(verification.id) })
-      .where(eq(escrowTransactionsTable.id, escrow.id));
+    paystackTxId = String(verification.id);
   }
 
+  // Atomic conditional update: only transition pending → in_escrow.
+  // If another request already processed this, affected rows = 0 and we return the current state.
   const now = new Date();
-  await db.update(escrowTransactionsTable)
-    .set({ status: "in_escrow", fundedAt: now })
-    .where(eq(escrowTransactionsTable.id, escrow.id));
+  const [locked] = await db.update(escrowTransactionsTable)
+    .set({ status: "in_escrow", fundedAt: now, ...(paystackTxId ? { paystackTransactionId: paystackTxId } : {}) })
+    .where(and(eq(escrowTransactionsTable.id, escrow.id), eq(escrowTransactionsTable.status, "pending")))
+    .returning();
+
+  if (!locked) {
+    // A concurrent request already funded this escrow
+    const [current] = await db.select().from(escrowTransactionsTable).where(eq(escrowTransactionsTable.id, escrow.id));
+    res.json({ message: "Escrow already funded", escrow: current }); return;
+  }
 
   // Record on client's wallet as an escrow_fund debit (money leaves client, sits in escrow)
   const clientWallet = await getOrCreateWallet(escrow.clientId);
@@ -228,8 +241,9 @@ router.post("/verify", requireAuth, async (req, res) => {
     description: `Escrow funded for project: ${project?.title ?? `#${escrow.projectId}`}`,
     reference,
     escrowTransactionId: escrow.id,
-  }).catch(() => {
-    // Client wallet goes negative is OK — they paid Paystack directly
+  }).catch((err) => {
+    // Wallet debit is advisory — client paid Paystack directly. Log but don't fail the response.
+    logger.error({ err, reference }, "Failed to record wallet debit for escrow fund");
   });
 
   // Generate invoice
@@ -243,7 +257,9 @@ router.post("/verify", requireAuth, async (req, res) => {
     amount: String(verifiedAmount),
     type: "escrow_funded",
     paystackReference: reference,
-  }).catch(() => {});
+  }).catch((err) => {
+    logger.error({ err, reference }, "Failed to create escrow_funded invoice");
+  });
 
   // Notify client + freelancer
   await Promise.all([
