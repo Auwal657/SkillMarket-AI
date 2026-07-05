@@ -76,7 +76,6 @@ router.post("/register", async (req, res) => {
   sendVerificationEmail(email, name, emailVerificationToken, req as Parameters<typeof sendVerificationEmail>[3]).catch(() => {});
 
   res.status(201).json({
-    token,
     user: { id: user.id, email: user.email, name: user.name, role: user.role, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt },
   });
 });
@@ -105,7 +104,6 @@ router.post("/login", async (req, res) => {
   setTokenCookie(res, token);
 
   res.json({
-    token,
     user: { id: user.id, email: user.email, name: user.name, role: user.role, isAdmin: user.isAdmin, university: user.university, avatarUrl: user.avatarUrl, emailVerified: user.emailVerified, createdAt: user.createdAt },
   });
 });

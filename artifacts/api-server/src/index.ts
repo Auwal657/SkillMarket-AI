@@ -68,7 +68,10 @@ app.use(
       if (ALLOWED_ORIGINS) {
         return callback(null, ALLOWED_ORIGINS.includes(origin));
       }
-      // No allow-list resolved — allow any origin (development / local)
+      // No allow-list resolved — fail-closed in production, open in dev
+      if (process.env.NODE_ENV === "production") {
+        return callback(new Error("CORS: origin not allowed"), false);
+      }
       return callback(null, true);
     },
     credentials: true,
