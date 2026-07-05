@@ -129,13 +129,20 @@ router.post("/initialize", requireAuth, requireRole("client"), async (req, res) 
     ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:5000");
   const callbackUrl = `${appBaseUrl}/payment/callback`;
 
-  const paystackData = await initializePayment({
-    email: client.email,
-    amountNGN: amount,
-    reference,
-    callbackUrl,
-    metadata: { projectId: project.id, clientId, freelancerId: acceptedApp.freelancerId, projectTitle: project.title },
-  });
+  let paystackData;
+  try {
+    paystackData = await initializePayment({
+      email: client.email,
+      amountNGN: amount,
+      reference,
+      callbackUrl,
+      metadata: { projectId: project.id, clientId, freelancerId: acceptedApp.freelancerId, projectTitle: project.title },
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Paystack initialization failed";
+    logger.error({ err }, "Paystack initializePayment error");
+    res.status(502).json({ error: `Payment gateway error: ${msg}` }); return;
+  }
 
   authUrl = paystackData.authorization_url;
   accessCode = paystackData.access_code;
@@ -182,8 +189,18 @@ router.post("/verify", requireAuth, async (req, res) => {
     // Dev mode: simulate verification
     logger.info({ reference }, "Dev mode: simulating payment verification");
   } else {
-    const verification = await verifyPayment(reference);
+    let verification;
+    try {
+      verification = await verifyPayment(reference);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Paystack verification failed";
+      logger.error({ err, reference }, "Paystack verifyPayment error");
+      res.status(502).json({ error: `Payment gateway error: ${msg}` }); return;
+    }
+
     if (verification.status !== "success") {
+      // Payment was cancelled or failed — do not update project or escrow to a funded state
+      logger.info({ reference, status: verification.status }, "Payment not successful — no DB update");
       res.status(400).json({ error: `Payment not successful: ${verification.gateway_response}` }); return;
     }
     verifiedAmount = verification.amount / 100; // convert from kobo
