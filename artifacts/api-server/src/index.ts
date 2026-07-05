@@ -9,6 +9,8 @@ import rateLimit from "express-rate-limit";
 import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 import { isUserOnline } from "./lib/socket";
+import { db, skillsTable } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import authRoutes from "./routes/auth";
 import usersRoutes from "./routes/users";
 import freelancersRoutes from "./routes/freelancers";
@@ -28,6 +30,41 @@ import invitationsRoutes from "./routes/invitations";
 import paymentsRoutes from "./routes/payments";
 import walletRoutes from "./routes/wallet";
 import analyticsRoutes from "./routes/analytics";
+
+// Seed default skills if the table is empty (idempotent — safe to run on every start)
+async function seedSkills() {
+  const DEFAULT_SKILLS = [
+    { name: "JavaScript", category: "Programming" },
+    { name: "TypeScript", category: "Programming" },
+    { name: "Python", category: "Programming" },
+    { name: "Java", category: "Programming" },
+    { name: "C#", category: "Programming" },
+    { name: "Go", category: "Programming" },
+    { name: "PHP", category: "Programming" },
+    { name: "React", category: "Frontend" },
+    { name: "Vue.js", category: "Frontend" },
+    { name: "Flutter", category: "Mobile" },
+    { name: "UI/UX Design", category: "Design" },
+    { name: "Graphic Design", category: "Design" },
+    { name: "Node.js", category: "Backend" },
+    { name: "Django", category: "Backend" },
+    { name: "Laravel", category: "Backend" },
+    { name: "DevOps", category: "Infrastructure" },
+    { name: "Data Science", category: "Data" },
+    { name: "Content Writing", category: "Writing" },
+  ];
+  try {
+    await db.execute(sql`
+      INSERT INTO skills (name, category)
+      SELECT name, category FROM json_to_recordset(${JSON.stringify(DEFAULT_SKILLS)}::json)
+        AS t(name text, category text)
+      ON CONFLICT (name) DO NOTHING
+    `);
+    logger.info("Skills catalog seeded (or already present)");
+  } catch (err) {
+    logger.error({ err }, "Failed to seed skills catalog — non-fatal");
+  }
+}
 
 // S1: Validate required secrets at startup before anything else
 if (!process.env.JWT_SECRET) {
@@ -226,6 +263,8 @@ initSocket(httpServer);
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   logger.info(`API server listening on port ${PORT}`);
+  // Seed default skills after server is up (non-blocking, non-fatal)
+  seedSkills().catch((err) => logger.error({ err }, "seedSkills uncaught error"));
 });
 
 export default app;
