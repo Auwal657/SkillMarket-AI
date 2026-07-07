@@ -26,6 +26,12 @@ router.get("/:id", requireAuth, async (req, res) => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
+  // Hide admin accounts from non-admin users
+  if (user.isAdmin) {
+    const [requester] = await db.select({ isAdmin: usersTable.isAdmin }).from(usersTable).where(eq(usersTable.id, req.user!.userId));
+    if (!requester?.isAdmin) { res.status(404).json({ error: "User not found" }); return; }
+  }
+
   res.json({
     id: user.id,
     email: user.email,
@@ -50,6 +56,7 @@ router.get("/:id/client-profile", async (req, res) => {
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  if (user.isAdmin) { res.status(404).json({ error: "User not found" }); return; }
   if (user.role !== "client") { res.status(404).json({ error: "Not a client" }); return; }
 
   res.json({

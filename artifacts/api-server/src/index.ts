@@ -9,8 +9,9 @@ import rateLimit from "express-rate-limit";
 import { logger } from "./lib/logger";
 import { initSocket } from "./lib/socket";
 import { isUserOnline } from "./lib/socket";
-import { db, skillsTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { db, skillsTable, usersTable } from "@workspace/db";
+import { sql, eq } from "drizzle-orm";
 import authRoutes from "./routes/auth";
 import usersRoutes from "./routes/users";
 import freelancersRoutes from "./routes/freelancers";
@@ -30,6 +31,45 @@ import invitationsRoutes from "./routes/invitations";
 import paymentsRoutes from "./routes/payments";
 import walletRoutes from "./routes/wallet";
 import analyticsRoutes from "./routes/analytics";
+
+// Seed the permanent super admin account if it doesn't already exist
+async function seedSuperAdmin() {
+  const ADMIN_EMAIL = "auwallmohammed809@gmail.com";
+  const ADMIN_PASSWORD = "auwal1234";
+  const ADMIN_NAME = "Super Admin";
+
+  try {
+    const [existing] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, ADMIN_EMAIL));
+
+    if (existing) {
+      // Ensure isAdmin flag is set even if the row existed before this feature
+      await db
+        .update(usersTable)
+        .set({ isAdmin: true, emailVerified: true })
+        .where(eq(usersTable.email, ADMIN_EMAIL));
+      logger.info("Super admin account already exists — verified isAdmin flag");
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+    await db.insert(usersTable).values({
+      email: ADMIN_EMAIL,
+      passwordHash,
+      name: ADMIN_NAME,
+      // 'client' is used as a placeholder role — the admin is isolated from
+      // all marketplace activity via the isAdmin flag and has no freelancer profile.
+      role: "client",
+      isAdmin: true,
+      emailVerified: true,
+    });
+    logger.info("Super admin account created successfully");
+  } catch (err) {
+    logger.error({ err }, "Failed to seed super admin — non-fatal");
+  }
+}
 
 // Seed default skills if the table is empty (idempotent — safe to run on every start)
 async function seedSkills() {
@@ -263,7 +303,8 @@ initSocket(httpServer);
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   logger.info(`API server listening on port ${PORT}`);
-  // Seed default skills after server is up (non-blocking, non-fatal)
+  // Seed default data after server is up (non-blocking, non-fatal)
+  seedSuperAdmin().catch((err) => logger.error({ err }, "seedSuperAdmin uncaught error"));
   seedSkills().catch((err) => logger.error({ err }, "seedSkills uncaught error"));
 });
 
