@@ -91,6 +91,7 @@ externalPort = 8080
 [userenv.shared]
 FROM_EMAIL = "noreply@skillmarket.ai"
 LOG_LEVEL = "info"
+sk_test_ = "sk_test_9ce707581b65a6597d51ef5e07417c6758f39d66"
 
 [deployment]
 deploymentTarget = "autoscale"
