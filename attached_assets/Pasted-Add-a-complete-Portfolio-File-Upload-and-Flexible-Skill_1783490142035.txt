@@ -1,0 +1,94 @@
+Add a complete Portfolio, File Upload, and Flexible Skills system to SkillMarket AI without breaking any existing functionality.
+
+IMPORTANT:
+- Do not modify authentication.
+- Do not modify AI recommendations.
+- Do not modify payments.
+- Do not modify messaging.
+- Do not modify the Admin system.
+- Do not redesign the UI.
+- Keep all existing features working.
+
+==========================
+1. FREELANCER PORTFOLIO
+==========================
+
+Each freelancer should have a Portfolio section on their profile.
+
+Allow freelancers to:
+- Add portfolio projects.
+- Edit portfolio projects.
+- Delete portfolio projects.
+
+Each portfolio item should include:
+- Project Title
+- Short Description
+- Technologies Used
+- Project Category
+- GitHub Repository URL (optional)
+- Live Demo URL (optional)
+- Cover Image
+- Multiple screenshots (optional)
+- Completion Date
+
+Display the portfolio on the freelancer's public profile in a clean, professional layout.
+
+==========================
+2. FILE UPLOADS
+==========================
+
+Allow secure file uploads.
+
+Freelancers can upload:
+- Portfolio images
+- Project screenshots
+- ZIP files
+- PDF files
+
+Clients can upload:
+- Project requirements
+- Images
+- PDF
+- DOCX
+- ZIP
+
+Display uploaded files with download links and previews where appropriate.
+
+Validate file types and sizes.
+
+==========================
+3. FLEXIBLE SKILLS
+==========================
+
+Keep the existing skills system exactly as it is.
+
+Additionally, allow users to type and add custom skills.
+
+Freelancers:
+- Keep the current skill selector.
+- Allow typing custom skills if they are not in the list.
+- Users can combine selected skills with custom skills.
+
+Clients:
+- Keep the current Required Skills selector.
+- Allow typing custom required skills if they are not in the list.
+- Users can combine selected skills with custom skills.
+
+Requirements:
+- Do not remove or replace the existing skills catalog.
+- Do not break the current Add Skills functionality.
+- Display custom skills as removable tags.
+- Save both predefined and custom skills.
+- Ensure AI recommendations and skill matching work with both predefined and custom skills.
+
+==========================
+GENERAL
+==========================
+
+- Store uploaded files securely.
+- Show upload progress.
+- Allow deleting uploaded files.
+- Keep the interface responsive.
+- Follow the existing project design.
+- Do not change unrelated code.
+- Do not break any existing functionality.

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck, MapPin, Award, CheckCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, Bookmark, ExternalLink, Star, Flag, Send, BadgeCheck, MapPin, Award, CheckCircle, Github, Calendar } from "lucide-react";
 import { useGetFreelancer } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import Avatar from "../components/common/Avatar";
@@ -366,30 +366,76 @@ export default function FreelancerProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {freelancer.portfolio.map(item => (
                   <div key={item.id} className="group border border-gray-200 rounded-xl overflow-hidden hover:border-indigo-300 hover:shadow-md transition-all duration-300 flex flex-col h-full bg-white">
+                    {/* Cover image */}
                     {item.imageUrl ? (
                       <div className="aspect-[4/3] overflow-hidden relative">
                         <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                        {item.category && (
+                          <span className="absolute top-3 left-3 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold tracking-wide rounded-md uppercase">
+                            {item.category}
+                          </span>
+                        )}
                       </div>
                     ) : (
-                      <div className="aspect-[4/3] bg-gray-50 flex items-center justify-center border-b border-gray-100">
+                      <div className="aspect-[4/3] bg-gray-50 flex items-center justify-center border-b border-gray-100 relative">
                         <Award size={48} className="text-gray-300" />
+                        {item.category && (
+                          <span className="absolute top-3 left-3 px-2 py-0.5 bg-gray-200 text-gray-600 text-[10px] font-bold tracking-wide rounded-md uppercase">
+                            {item.category}
+                          </span>
+                        )}
                       </div>
                     )}
+
+                    {/* Screenshots strip */}
+                    {item.screenshots && item.screenshots.length > 0 && (
+                      <div className="flex gap-1 px-3 pt-3 overflow-hidden">
+                        {item.screenshots.slice(0, 4).map((s, i) => (
+                          <img key={i} src={s} alt={`screenshot ${i + 1}`} className="w-16 h-11 object-cover rounded-md border border-gray-100 flex-shrink-0" />
+                        ))}
+                        {item.screenshots.length > 4 && (
+                          <div className="w-16 h-11 rounded-md border border-gray-100 bg-gray-100 flex items-center justify-center flex-shrink-0 text-[10px] text-gray-500 font-bold">
+                            +{item.screenshots.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="p-5 flex-1 flex flex-col">
-                      <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{item.title}</h3>
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-1">{item.description}</p>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="text-base font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-1">{item.title}</h3>
+                        {item.completionDate && (
+                          <span className="flex items-center gap-1 text-[10px] text-gray-400 font-medium whitespace-nowrap flex-shrink-0 mt-0.5">
+                            <Calendar size={10} />
+                            {new Date(item.completionDate + "-01").toLocaleDateString("en-US", { year: "numeric", month: "short" })}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-1 leading-relaxed">{item.description}</p>
+
                       {item.tags && item.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-4">
-                          {item.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-md">{t}</span>)}
-                          {item.tags.length > 3 && <span className="text-xs text-gray-400 font-medium">+{item.tags.length - 3}</span>}
+                          {item.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded-md uppercase tracking-wide">{t}</span>)}
+                          {item.tags.length > 3 && <span className="text-xs text-gray-400 font-medium self-center">+{item.tags.length - 3}</span>}
                         </div>
                       )}
-                      {item.projectUrl && (
-                        <a href={item.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-600 hover:text-indigo-800 mt-auto">
-                          <ExternalLink size={16} /> View Live Project
-                        </a>
-                      )}
+
+                      <div className="flex items-center gap-3 mt-auto pt-3 border-t border-gray-50">
+                        {item.githubUrl && (
+                          <a href={item.githubUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                            <Github size={15} /> Code
+                          </a>
+                        )}
+                        {item.projectUrl && (
+                          <a href={item.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+                            <ExternalLink size={15} /> Live Demo
+                          </a>
+                        )}
+                        {!item.githubUrl && !item.projectUrl && (
+                          <span className="text-xs text-gray-400">No links provided</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

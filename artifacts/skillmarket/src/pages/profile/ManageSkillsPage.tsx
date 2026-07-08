@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Zap, Plus, Trash2, Code2 } from "lucide-react";
-import { useListSkills, useListMySkills, useAddSkill, useRemoveSkill } from "@workspace/api-client-react";
+import { Zap, Plus, Trash2, Code2, Pencil } from "lucide-react";
+import { useListSkills, useListMySkills, useAddSkill, useRemoveSkill, useCreateSkill } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import SkillBadge from "../../components/common/SkillBadge";
@@ -18,30 +18,59 @@ export default function ManageSkillsPage() {
   const { data: mySkills, isLoading: skillsLoading } = useListMySkills();
   const addMutation = useAddSkill();
   const removeMutation = useRemoveSkill();
+  const createSkillMutation = useCreateSkill();
 
+  const [mode, setMode] = useState<"catalog" | "custom">("catalog");
   const [selectedSkillId, setSelectedSkillId] = useState("");
+  const [customSkillName, setCustomSkillName] = useState("");
   const [proficiency, setProficiency] = useState<"beginner" | "intermediate" | "advanced" | "expert">("intermediate");
   const [error, setError] = useState("");
+  const [addingCustom, setAddingCustom] = useState(false);
 
   const mySkillIds = new Set(mySkills?.map(s => s.skillId) ?? []);
-
   const availableSkills = catalog?.filter(s => !mySkillIds.has(s.id)) ?? [];
-
   const grouped = availableSkills.reduce((acc, s) => {
     if (!acc[s.category]) acc[s.category] = [];
     acc[s.category]!.push(s);
     return acc;
   }, {} as Record<string, { id: number; name: string; category: string }[]>);
 
-  const handleAdd = async () => {
+  const handleAddFromCatalog = async () => {
     if (!selectedSkillId) { setError("Please select a skill"); return; }
     setError("");
     try {
       await addMutation.mutateAsync({ data: { skillId: parseInt(selectedSkillId), proficiencyLevel: proficiency } });
       queryClient.invalidateQueries({ queryKey: ["/api/freelancers/me/skills"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/skills"] });
       setSelectedSkillId("");
     } catch (err: unknown) {
       setError((err as { data?: { error?: string } })?.data?.error ?? "Failed to add skill");
+    }
+  };
+
+  const handleAddCustom = async () => {
+    const name = customSkillName.trim();
+    if (!name) { setError("Please enter a skill name"); return; }
+    setError("");
+    setAddingCustom(true);
+    try {
+      // Create or find the skill in the catalog
+      const skill = await createSkillMutation.mutateAsync({ data: { name, category: "Custom" } });
+      // Check if already added
+      if (mySkillIds.has(skill.id)) {
+        setError(`"${skill.name}" is already in your skillset`);
+        setAddingCustom(false);
+        return;
+      }
+      await addMutation.mutateAsync({ data: { skillId: skill.id, proficiencyLevel: proficiency } });
+      queryClient.invalidateQueries({ queryKey: ["/api/freelancers/me/skills"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/skills"] });
+      setCustomSkillName("");
+      setMode("catalog");
+    } catch (err: unknown) {
+      setError((err as { data?: { error?: string } })?.data?.error ?? "Failed to add skill");
+    } finally {
+      setAddingCustom(false);
     }
   };
 
@@ -55,6 +84,8 @@ export default function ManageSkillsPage() {
   };
 
   if (catalogLoading || skillsLoading) return <div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>;
+
+  const isAdding = addMutation.isPending || addingCustom;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fade-in">
@@ -71,29 +102,60 @@ export default function ManageSkillsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Add Skill Form */}
+        {/* Add Skill Panel */}
         <div className="lg:col-span-5 order-2 lg:order-1">
           <div className="card p-6 shadow-sm sticky top-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <Plus size={18} className="text-indigo-600" /> Add a New Skill
+            <h2 className="text-lg font-semibold text-gray-900 mb-5 flex items-center gap-2">
+              <Plus size={18} className="text-indigo-600" /> Add a Skill
             </h2>
-            
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl px-4 py-3 mb-6 shadow-sm">{error}</div>}
-            
-            <div className="space-y-5">
-              <div>
-                <label className="label">Select Skill</label>
-                <select value={selectedSkillId} onChange={e => setSelectedSkillId(e.target.value)} className="input w-full bg-gray-50/50 focus:bg-white text-base py-3">
-                  <option value="">Choose a skill...</option>
-                  {Object.entries(grouped).map(([cat, skills]) => (
-                    <optgroup key={cat} label={cat} className="font-semibold text-gray-900">
-                      {skills?.map(s => <option key={s.id} value={s.id} className="font-normal">{s.name}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              
+
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-gray-200 p-0.5 mb-5 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => { setMode("catalog"); setError(""); }}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === "catalog" ? "bg-white shadow-sm text-indigo-700 border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                From Catalog
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode("custom"); setError(""); }}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === "custom" ? "bg-white shadow-sm text-indigo-700 border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                <Pencil size={12} className="inline mr-1" />Custom Skill
+              </button>
+            </div>
+
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl px-4 py-3 mb-5 shadow-sm">{error}</div>}
+
+            <div className="space-y-4">
+              {mode === "catalog" ? (
+                <div>
+                  <label className="label">Select Skill</label>
+                  <select value={selectedSkillId} onChange={e => setSelectedSkillId(e.target.value)} className="input w-full bg-gray-50/50 focus:bg-white text-base py-3">
+                    <option value="">Choose a skill…</option>
+                    {Object.entries(grouped).map(([cat, skills]) => (
+                      <optgroup key={cat} label={cat} className="font-semibold text-gray-900">
+                        {skills?.map(s => <option key={s.id} value={s.id} className="font-normal">{s.name}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="label">Skill Name</label>
+                  <input
+                    value={customSkillName}
+                    onChange={e => setCustomSkillName(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddCustom(); } }}
+                    className="input w-full bg-gray-50/50 focus:bg-white text-base py-3"
+                    placeholder="e.g. Next.js, Figma, AWS Lambda…"
+                  />
+                  <p className="text-xs text-gray-400 mt-1.5">If this skill exists in the catalog, it will be linked automatically.</p>
+                </div>
+              )}
+
               <div>
                 <label className="label">Proficiency Level</label>
                 <select value={proficiency} onChange={e => setProficiency(e.target.value as typeof proficiency)} className="input w-full bg-gray-50/50 focus:bg-white text-base py-3">
@@ -101,12 +163,12 @@ export default function ManageSkillsPage() {
                 </select>
               </div>
 
-              <button 
-                onClick={handleAdd} 
-                disabled={addMutation.isPending || !selectedSkillId} 
-                className="btn-primary w-full py-3 mt-2 shadow-md shadow-indigo-200/50"
+              <button
+                onClick={mode === "catalog" ? handleAddFromCatalog : handleAddCustom}
+                disabled={isAdding || (mode === "catalog" ? !selectedSkillId : !customSkillName.trim())}
+                className="btn-primary w-full py-3 mt-1 shadow-md shadow-indigo-200/50"
               >
-                {addMutation.isPending ? (
+                {isAdding ? (
                   <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
                 ) : (
                   <span className="flex items-center justify-center gap-2 font-semibold">
@@ -118,13 +180,12 @@ export default function ManageSkillsPage() {
           </div>
         </div>
 
-        {/* Current Skills List */}
+        {/* Current Skills */}
         <div className="lg:col-span-7 order-1 lg:order-2">
           <div className="card p-8 shadow-sm h-full">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <Code2 size={20} className="text-gray-400" />
-                Your Skillset
+                <Code2 size={20} className="text-gray-400" /> Your Skillset
               </h2>
               <span className="px-3 py-1 bg-gray-100 text-gray-600 font-medium rounded-full text-sm">
                 {mySkills?.length ?? 0} skills
@@ -134,16 +195,14 @@ export default function ManageSkillsPage() {
             {mySkills && mySkills.length > 0 ? (
               <div className="flex flex-wrap gap-3">
                 {mySkills.map(s => (
-                  <div 
-                    key={s.id} 
+                  <div
+                    key={s.id}
                     className="group flex items-center gap-2 pl-4 pr-1 py-1.5 bg-white border border-gray-200 hover:border-indigo-300 hover:shadow-sm text-gray-800 rounded-full transition-all duration-200"
                   >
                     <span className="font-semibold text-sm">{s.skillName}</span>
-                    <span className="text-gray-400 text-xs px-1.5 py-0.5 bg-gray-50 rounded-md capitalize">
-                      {s.proficiencyLevel}
-                    </span>
-                    <button 
-                      onClick={() => handleRemove(s.skillId)} 
+                    <span className="text-gray-400 text-xs px-1.5 py-0.5 bg-gray-50 rounded-md capitalize">{s.proficiencyLevel}</span>
+                    <button
+                      onClick={() => handleRemove(s.skillId)}
                       className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors ml-1 focus:outline-none"
                       title="Remove skill"
                     >
@@ -158,12 +217,11 @@ export default function ManageSkillsPage() {
                   <Zap size={28} className="text-gray-300" />
                 </div>
                 <p className="text-gray-900 font-medium mb-1">Your skillset is empty</p>
-                <p className="text-gray-500 text-sm max-w-xs">Add skills from the menu to show clients what you can do.</p>
+                <p className="text-gray-500 text-sm max-w-xs">Add skills from the catalog or type your own to show clients what you can do.</p>
               </div>
             )}
           </div>
         </div>
-
       </div>
     </div>
   );

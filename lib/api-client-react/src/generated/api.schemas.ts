@@ -109,7 +109,14 @@ export interface PortfolioItem {
   imageUrl?: string | null;
   /** @nullable */
   projectUrl?: string | null;
+  /** @nullable */
+  githubUrl?: string | null;
+  /** @nullable */
+  category?: string | null;
   tags?: string[];
+  screenshots?: string[];
+  /** @nullable */
+  completionDate?: string | null;
   createdAt: string;
 }
 
@@ -190,7 +197,11 @@ export interface PortfolioItemInput {
   description: string;
   imageUrl?: string;
   projectUrl?: string;
+  githubUrl?: string;
+  category?: string;
   tags?: string[];
+  screenshots?: string[];
+  completionDate?: string;
 }
 
 export type ProjectStatus = typeof ProjectStatus[keyof typeof ProjectStatus];

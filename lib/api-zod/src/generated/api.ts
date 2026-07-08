@@ -378,7 +378,11 @@ export const ListMyPortfolioResponseItem = zod.object({
   "description": zod.string(),
   "imageUrl": zod.string().nullish(),
   "projectUrl": zod.string().nullish(),
+  "githubUrl": zod.string().nullish(),
+  "category": zod.string().nullish(),
   "tags": zod.array(zod.string()).optional(),
+  "screenshots": zod.array(zod.string()).optional(),
+  "completionDate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListMyPortfolioResponse = zod.array(ListMyPortfolioResponseItem)
@@ -392,7 +396,11 @@ export const AddPortfolioItemBody = zod.object({
   "description": zod.string(),
   "imageUrl": zod.string().optional(),
   "projectUrl": zod.string().optional(),
-  "tags": zod.array(zod.string()).optional()
+  "githubUrl": zod.string().optional(),
+  "category": zod.string().optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "screenshots": zod.array(zod.string()).optional(),
+  "completionDate": zod.string().optional()
 })
 
 

@@ -211,9 +211,47 @@ router.post("/me/portfolio", requireAuth, requireRole("freelancer"), async (req,
     description: parsed.data.description,
     imageUrl: parsed.data.imageUrl ?? null,
     projectUrl: parsed.data.projectUrl ?? null,
+    githubUrl: parsed.data.githubUrl ?? null,
+    category: parsed.data.category ?? null,
     tags: parsed.data.tags ?? [],
+    screenshots: parsed.data.screenshots ?? [],
+    completionDate: parsed.data.completionDate ?? null,
   }).returning();
   res.status(201).json(item);
+});
+
+router.patch("/me/portfolio/:itemId", requireAuth, requireRole("freelancer"), async (req, res) => {
+  const itemId = parseInt(req.params.itemId as string, 10);
+  if (isNaN(itemId)) { res.status(400).json({ error: "Invalid itemId" }); return; }
+
+  const [profile] = await db.select({ id: freelancerProfilesTable.id }).from(freelancerProfilesTable).where(eq(freelancerProfilesTable.userId, req.user!.userId));
+  if (!profile) { res.status(404).json({ error: "No freelancer profile" }); return; }
+
+  const [existing] = await db.select({ id: portfolioItemsTable.id })
+    .from(portfolioItemsTable)
+    .where(sql`${portfolioItemsTable.id} = ${itemId} AND ${portfolioItemsTable.freelancerProfileId} = ${profile.id}`);
+  if (!existing) { res.status(404).json({ error: "Portfolio item not found" }); return; }
+
+  const parsed = AddPortfolioItemBody.partial().safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
+
+  const updates: Record<string, unknown> = {};
+  if (parsed.data.title !== undefined) updates.title = parsed.data.title;
+  if (parsed.data.description !== undefined) updates.description = parsed.data.description;
+  if ("imageUrl" in parsed.data) updates.imageUrl = parsed.data.imageUrl ?? null;
+  if ("projectUrl" in parsed.data) updates.projectUrl = parsed.data.projectUrl ?? null;
+  if ("githubUrl" in parsed.data) updates.githubUrl = parsed.data.githubUrl ?? null;
+  if ("category" in parsed.data) updates.category = parsed.data.category ?? null;
+  if (parsed.data.tags !== undefined) updates.tags = parsed.data.tags;
+  if (parsed.data.screenshots !== undefined) updates.screenshots = parsed.data.screenshots;
+  if ("completionDate" in parsed.data) updates.completionDate = parsed.data.completionDate ?? null;
+
+  const [updated] = await db.update(portfolioItemsTable)
+    .set(updates)
+    .where(sql`${portfolioItemsTable.id} = ${itemId} AND ${portfolioItemsTable.freelancerProfileId} = ${profile.id}`)
+    .returning();
+
+  res.json(updated);
 });
 
 router.delete("/me/portfolio/:itemId", requireAuth, requireRole("freelancer"), async (req, res) => {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Plus, X, Briefcase, ArrowRight, DollarSign, Clock } from "lucide-react";
+import { Plus, X, Briefcase, ArrowRight, DollarSign, Clock, Pencil } from "lucide-react";
 import { useCreateProject, useListSkills } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -13,7 +13,8 @@ export default function PostProjectPage() {
   const [form, setForm] = useState({
     title: "", description: "", category: "", budgetMin: "", budgetMax: "", timelineWeeks: "", requiredSkills: [] as string[],
   });
-  const [skillInput, setSkillInput] = useState("");
+  const [catalogSkill, setCatalogSkill] = useState("");
+  const [customSkillInput, setCustomSkillInput] = useState("");
   const [error, setError] = useState("");
 
   const CATEGORIES = ["Frontend", "Backend", "Mobile", "Design", "Data Science", "Writing", "Marketing", "Video", "Other"];
@@ -23,7 +24,13 @@ export default function PostProjectPage() {
     if (s && !form.requiredSkills.includes(s)) {
       setForm(f => ({ ...f, requiredSkills: [...f.requiredSkills, s] }));
     }
-    setSkillInput("");
+    setCatalogSkill("");
+    setCustomSkillInput("");
+  };
+
+  const addCustomSkill = () => {
+    const s = customSkillInput.trim();
+    if (s) addSkill(s);
   };
 
   const removeSkill = (skill: string) => setForm(f => ({ ...f, requiredSkills: f.requiredSkills.filter(s => s !== skill) }));
@@ -70,6 +77,7 @@ export default function PostProjectPage() {
           </div>
         )}
 
+        {/* Basic Details */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-5 sm:px-8 py-5 sm:py-6 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-xl font-bold text-gray-900">1. Basic Details</h2>
@@ -80,7 +88,6 @@ export default function PostProjectPage() {
               <label className="block text-sm font-bold text-gray-900 mb-2">Project Title <span className="text-red-500">*</span></label>
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="input text-lg py-3" placeholder="e.g. Build a React dashboard for my startup" required />
             </div>
-
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">Category <span className="text-red-500">*</span></label>
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="input py-3" required>
@@ -91,6 +98,7 @@ export default function PostProjectPage() {
           </div>
         </div>
 
+        {/* Scope & Requirements */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-5 sm:px-8 py-5 sm:py-6 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-xl font-bold text-gray-900">2. Scope & Requirements</h2>
@@ -100,29 +108,64 @@ export default function PostProjectPage() {
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">Project Description <span className="text-red-500">*</span></label>
               <p className="text-xs text-gray-500 mb-3">Provide clear expectations, deliverables, and any existing assets.</p>
-              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="input min-h-[200px] p-4 text-base" placeholder="Describe the project in detail..." required />
+              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="input min-h-[200px] p-4 text-base" placeholder="Describe the project in detail…" required />
             </div>
 
+            {/* Required Skills */}
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
-              <label className="block text-sm font-bold text-gray-900 mb-2">Required Skills</label>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Required Skills</label>
               <p className="text-xs text-gray-500 mb-4">Adding specific skills helps AI match your project to the right freelancers.</p>
-              
-              <div className="flex gap-3 mb-4">
-                <select value={skillInput} onChange={e => setSkillInput(e.target.value)} className="input flex-1 bg-white">
-                  <option value="">Select skills from catalog...</option>
+
+              {/* Catalog select */}
+              <div className="flex gap-3 mb-3">
+                <select
+                  value={catalogSkill}
+                  onChange={e => setCatalogSkill(e.target.value)}
+                  className="input flex-1 bg-white"
+                >
+                  <option value="">Select from catalog…</option>
                   {skillsCatalog?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
-                <button type="button" onClick={() => addSkill(skillInput)} className="px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors font-bold text-sm shadow-sm flex items-center gap-2">
-                  <Plus size={16} /> Add
+                <button
+                  type="button"
+                  onClick={() => addSkill(catalogSkill)}
+                  disabled={!catalogSkill}
+                  className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors font-bold text-sm shadow-sm flex items-center gap-2 disabled:opacity-40"
+                >
+                  <Plus size={15} /> Add
                 </button>
               </div>
-              
+
+              {/* Custom skill input */}
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <Pencil size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={customSkillInput}
+                    onChange={e => setCustomSkillInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomSkill(); } }}
+                    className="input pl-9 bg-white"
+                    placeholder="Or type a custom skill…"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addCustomSkill}
+                  disabled={!customSkillInput.trim()}
+                  className="px-5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors font-bold text-sm flex items-center gap-2 disabled:opacity-40"
+                >
+                  <Plus size={15} /> Add Custom
+                </button>
+              </div>
+
               {form.requiredSkills.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                <div className="flex flex-wrap gap-2 pt-3 mt-3 border-t border-gray-200">
                   {form.requiredSkills.map(s => (
                     <span key={s} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-bold border border-indigo-200">
                       {s}
-                      <button type="button" onClick={() => removeSkill(s)} className="hover:text-red-600 bg-white/50 hover:bg-white rounded-full p-0.5 transition-colors"><X size={14} /></button>
+                      <button type="button" onClick={() => removeSkill(s)} className="hover:text-red-600 bg-white/50 hover:bg-white rounded-full p-0.5 transition-colors">
+                        <X size={14} />
+                      </button>
                     </span>
                   ))}
                 </div>
@@ -131,6 +174,7 @@ export default function PostProjectPage() {
           </div>
         </div>
 
+        {/* Budget & Timeline */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-5 sm:px-8 py-5 sm:py-6 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-xl font-bold text-gray-900">3. Budget & Timeline</h2>
@@ -152,7 +196,6 @@ export default function PostProjectPage() {
                 </div>
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2">Expected Timeline <span className="text-gray-400 font-normal ml-1">(Optional)</span></label>
               <div className="relative max-w-sm">
