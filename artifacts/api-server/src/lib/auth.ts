@@ -14,7 +14,7 @@ const COOKIE_NAME = "auth_token";
 
 export interface JwtPayload {
   userId: number;
-  role: "freelancer" | "client";
+  role: "freelancer" | "client" | "admin";
   email: string;
 }
 
@@ -106,6 +106,12 @@ export function requireRole(role: "freelancer" | "client") {
     }
     next();
   };
+}
+
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) { res.status(401).json({ error: "Not authenticated" }); return; }
+  if (req.user.role !== "admin") { res.status(403).json({ error: "Admin access required" }); return; }
+  next();
 }
 
 // Optional auth — attaches user if a valid token is present, never rejects

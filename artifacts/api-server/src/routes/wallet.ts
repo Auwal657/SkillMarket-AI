@@ -178,8 +178,7 @@ router.get("/invoices/:id", requireAuth, async (req, res) => {
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
 
   const uid = req.user!.userId;
-  const [user] = await db.select({ isAdmin: usersTable.isAdmin }).from(usersTable).where(eq(usersTable.id, uid));
-  if (invoice.clientId !== uid && invoice.freelancerId !== uid && !user?.isAdmin) {
+  if (invoice.clientId !== uid && invoice.freelancerId !== uid && req.user!.role !== "admin") {
     res.status(403).json({ error: "Forbidden" }); return;
   }
 

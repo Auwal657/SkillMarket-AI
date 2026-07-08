@@ -27,9 +27,8 @@ router.get("/:id", requireAuth, async (req, res) => {
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
   // Hide admin accounts from non-admin users
-  if (user.isAdmin) {
-    const [requester] = await db.select({ isAdmin: usersTable.isAdmin }).from(usersTable).where(eq(usersTable.id, req.user!.userId));
-    if (!requester?.isAdmin) { res.status(404).json({ error: "User not found" }); return; }
+  if (user.isAdmin && req.user!.role !== "admin") {
+    res.status(404).json({ error: "User not found" }); return;
   }
 
   res.json({

@@ -46,7 +46,7 @@ export const LoginResponse = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string(),
-  "role": zod.enum(['freelancer', 'client']),
+  "role": zod.enum(['freelancer', 'client', 'admin']),
   "university": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -70,7 +70,7 @@ export const GetMeResponse = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string(),
-  "role": zod.enum(['freelancer', 'client']),
+  "role": zod.enum(['freelancer', 'client', 'admin']),
   "university": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "createdAt": zod.coerce.date()

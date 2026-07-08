@@ -20,7 +20,7 @@ export default function ProtectedRoute({ children, role, adminOnly }: Props) {
   }
 
   if (!user) return <Redirect to="/login" />;
-  if (adminOnly && !user.isAdmin) return <Redirect to="/" />;
+  if (adminOnly && user.role !== "admin") return <Redirect to="/" />;
   if (role && user.role !== role) return <Redirect to="/" />;
 
   return <>{children}</>;

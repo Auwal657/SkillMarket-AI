@@ -46,6 +46,7 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 export const UserRole = {
   freelancer: 'freelancer',
   client: 'client',
+  admin: 'admin',
 } as const;
 
 export interface User {

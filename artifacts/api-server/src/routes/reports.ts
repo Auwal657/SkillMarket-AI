@@ -72,15 +72,7 @@ router.post("/", requireAuth, async (req, res) => {
 });
 
 router.get("/admin", requireAuth, async (req, res) => {
-  const [me] = await db
-    .select({ isAdmin: usersTable.isAdmin })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.user!.userId));
-
-  if (!me?.isAdmin) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
+  if (req.user!.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
 
   const status = req.query.status as string | undefined;
   const limit = Math.min(parseInt(req.query.limit as string || "50", 10), 200);
@@ -112,15 +104,7 @@ router.get("/admin", requireAuth, async (req, res) => {
 });
 
 router.patch("/admin/:id", requireAuth, async (req, res) => {
-  const [me] = await db
-    .select({ isAdmin: usersTable.isAdmin })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.user!.userId));
-
-  if (!me?.isAdmin) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
+  if (req.user!.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
 
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {

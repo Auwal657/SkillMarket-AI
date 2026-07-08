@@ -6,22 +6,9 @@ import {
   escrowTransactionsTable, walletTransactionsTable, withdrawalRequestsTable, walletsTable,
   reportsTable,
 } from "@workspace/db";
-import { requireAuth } from "../lib/auth";
-import type { Request, Response, NextFunction } from "express";
+import { requireAuth, requireAdmin } from "../lib/auth";
 
 const router = Router();
-
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user) { res.status(401).json({ error: "Not authenticated" }); return; }
-  (async () => {
-    const [user] = await db
-      .select({ isAdmin: usersTable.isAdmin })
-      .from(usersTable)
-      .where(eq(usersTable.id, req.user!.userId));
-    if (!user?.isAdmin) { res.status(403).json({ error: "Admin access required" }); return; }
-    next();
-  })().catch(next);
-}
 
 router.get("/stats", requireAuth, requireAdmin, async (_req, res) => {
   const [[users], [projects], [applications], [reviews]] = await Promise.all([

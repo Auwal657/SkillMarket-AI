@@ -169,10 +169,10 @@ export default function Navbar() {
                       <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg shadow-gray-200/80 border border-gray-100 py-1 z-50 animate-scale-in">
                         <div className="px-4 py-3 border-b border-gray-100 mb-1">
                           <p className="font-semibold text-sm text-gray-900 truncate">{user.name}</p>
-                          <p className="text-xs text-gray-500 capitalize mt-0.5">{user.isAdmin ? "Super Admin" : user.role}</p>
+                          <p className="text-xs text-gray-500 capitalize mt-0.5">{user.role === "admin" ? "Super Admin" : user.role}</p>
                         </div>
                         <div className="p-1">
-                          {user.isAdmin ? (
+                          {user.role === "admin" ? (
                             <Link href="/admin" className="flex items-center gap-2.5 px-3 py-2 text-sm text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors font-medium" onClick={() => setUserMenuOpen(false)}>
                               <Shield size={16} /> Admin Dashboard
                             </Link>
@@ -260,7 +260,7 @@ export default function Navbar() {
                 <Avatar name={user.name} avatarUrl={user.avatarUrl} size="md" />
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 truncate text-sm">{user.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user.isAdmin ? "Super Admin" : user.role}</p>
+                  <p className="text-xs text-gray-500 capitalize">{user.role === "admin" ? "Super Admin" : user.role}</p>
                 </div>
               </div>
             )}
@@ -290,7 +290,7 @@ export default function Navbar() {
                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-2 pb-1">My Account</p>
                   </div>
 
-                  {user.isAdmin ? (
+                  {user.role === "admin" ? (
                     <Link href="/admin" onClick={closeMobile} className={cn(
                       "mobile-nav-item font-medium",
                       isActive("/admin") ? "bg-indigo-50 text-indigo-700" : "text-indigo-700 hover:bg-indigo-50"

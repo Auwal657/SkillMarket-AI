@@ -177,11 +177,9 @@ router.post("/verify", requireAuth, async (req, res) => {
     .where(eq(escrowTransactionsTable.paystackReference, reference));
   if (!escrow) { res.status(404).json({ error: "Escrow transaction not found" }); return; }
 
-  // Only the client who owns this escrow may verify it (admins bypass via isAdmin flag in DB)
-  if (escrow.clientId !== req.user!.userId) {
-    const [caller] = await db.select({ isAdmin: usersTable.isAdmin }).from(usersTable)
-      .where(eq(usersTable.id, req.user!.userId));
-    if (!caller?.isAdmin) { res.status(403).json({ error: "Forbidden" }); return; }
+  // Only the client who owns this escrow may verify it (admins bypass)
+  if (escrow.clientId !== req.user!.userId && req.user!.role !== "admin") {
+    res.status(403).json({ error: "Forbidden" }); return;
   }
 
   if (["funded", "in_escrow", "released"].includes(escrow.status)) {
@@ -340,8 +338,7 @@ router.post("/refund/:projectId", requireAuth, async (req, res) => {
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
   if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
-  const [user] = await db.select({ isAdmin: usersTable.isAdmin }).from(usersTable).where(eq(usersTable.id, uid));
-  if (project.clientId !== uid && !user?.isAdmin) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (project.clientId !== uid && req.user!.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
 
   const [escrow] = await db.select().from(escrowTransactionsTable)
     .where(eq(escrowTransactionsTable.projectId, projectId));

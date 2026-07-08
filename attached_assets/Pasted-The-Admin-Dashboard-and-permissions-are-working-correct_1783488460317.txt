@@ -1,0 +1,71 @@
+The Admin Dashboard and permissions are working correctly. However, the administrator is currently implemented as a Client account, which is not the desired architecture.
+
+Please refactor the authentication and user model so that the Admin is a completely separate System Admin account, not a Client or Freelancer.
+
+Requirements:
+
+- Keep the existing Admin Dashboard and all admin functionality exactly as they are.
+- Do NOT redesign or remove any admin features.
+- Do NOT break the client or freelancer workflow.
+
+System Admin:
+
+- Remove the administrator from the Client role.
+- Remove the administrator from the Freelancer role.
+- The administrator must have only one role: `admin`.
+- The administrator must be a unique system account.
+
+Admin credentials:
+
+Email: auwallmohammed809@gmail.com
+Password: auwal1234
+
+Authentication:
+
+- The admin logs in directly using these credentials.
+- Do not require registration or account creation.
+- Automatically redirect the admin to `/admin` after login.
+
+The System Admin must NEVER:
+
+- Create a Client profile.
+- Create a Freelancer profile.
+- Be prompted to choose between Client or Freelancer.
+- Complete onboarding like marketplace users.
+- Appear in freelancer lists.
+- Appear in client lists.
+- Appear in AI recommendations.
+- Post projects.
+- Apply for projects.
+- Send proposals.
+- Receive invitations.
+- Hire freelancers.
+- Be hired by clients.
+- Send marketplace messages.
+- Leave or receive reviews.
+- Participate in any marketplace workflow.
+
+The System Admin's only purpose is platform management.
+
+The Admin Dashboard should continue to provide:
+
+- Dashboard & Analytics
+- User Management
+- Project Management
+- Proposal Management
+- Payment & Transaction Monitoring
+- Report Management
+- Skills & Category Management
+- Platform Settings
+- Platform Announcements
+
+Security:
+
+- Only users with the `admin` role can access `/admin`.
+- Redirect all non-admin users away from admin pages.
+- Seed the System Admin automatically if it does not exist.
+- Do not create duplicate admin accounts.
+
+Keep all existing client, freelancer, AI recommendation, messaging, payment, and marketplace functionality unchanged.
+
+The only change is to make the administrator a true System Admin account that is completely independent of the marketplace.

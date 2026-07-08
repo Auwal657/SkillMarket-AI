@@ -4,6 +4,12 @@ import { db, conversationsTable, messagesTable, usersTable, notificationsTable }
 import { requireAuth } from "../lib/auth";
 import { z } from "zod";
 
+// Admin accounts are platform-only and must never participate in marketplace messaging
+function blockAdmin(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction): void {
+  if (req.user?.role === "admin") { res.status(403).json({ error: "Admin accounts cannot participate in marketplace messaging" }); return; }
+  next();
+}
+
 const router = Router();
 
 const SendMessageBody = z.object({
@@ -14,7 +20,7 @@ const SendMessageBody = z.object({
   attachmentType: z.string().optional().nullable(),
 });
 
-router.get("/conversations", requireAuth, async (req, res) => {
+router.get("/conversations", requireAuth, blockAdmin, async (req, res) => {
   const uid = req.user!.userId;
   const conversations = await db.select().from(conversationsTable)
     .where(or(eq(conversationsTable.participant1Id, uid), eq(conversationsTable.participant2Id, uid)))
@@ -64,7 +70,7 @@ router.get("/conversations", requireAuth, async (req, res) => {
   res.json(result);
 });
 
-router.get("/:conversationId", requireAuth, async (req, res) => {
+router.get("/:conversationId", requireAuth, blockAdmin, async (req, res) => {
   const conversationId = parseInt(req.params.conversationId as string, 10);
   if (isNaN(conversationId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const uid = req.user!.userId;
@@ -89,7 +95,7 @@ router.get("/:conversationId", requireAuth, async (req, res) => {
   res.json(messages);
 });
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, blockAdmin, async (req, res) => {
   const parsed = SendMessageBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation error" }); return; }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import { Link } from "wouter";
 import {
   Users, FolderOpen, Wallet, TrendingUp, DollarSign, UserCheck,
@@ -145,8 +146,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function AdminDashboard() {
+  const { user, isLoading: authLoading } = useAuth();
+  const isAdmin = authLoading ? null : user?.role === "admin" ? true : false;
   const [tab, setTab] = useState<Tab>("analytics");
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,13 +162,6 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [escrows, setEscrows] = useState<EscrowTx[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
-
-  useEffect(() => {
-    fetch("/api/admin/me", { credentials: "include" })
-      .then(r => r.json())
-      .then(d => setIsAdmin(d.isAdmin ?? false))
-      .catch(() => setIsAdmin(false));
-  }, []);
 
   const loadData = useCallback(async (t: Tab) => {
     setLoading(true);

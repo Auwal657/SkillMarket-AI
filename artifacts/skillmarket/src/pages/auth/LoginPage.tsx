@@ -20,11 +20,10 @@ export default function LoginPage() {
     try {
       const res = await loginMutation.mutateAsync({ data: { email, password } });
       login(res.token, res.user as Parameters<typeof login>[1]);
-      if ((res.user as { isAdmin?: boolean }).isAdmin) {
+      if (res.user.role === "admin") {
         navigate("/admin");
       } else {
-        const role = res.user.role;
-        navigate(role === "client" ? "/dashboard/client" : "/dashboard");
+        navigate(res.user.role === "client" ? "/dashboard/client" : "/dashboard");
       }
     } catch (err: unknown) {
       const msg = (err as { data?: { error?: string } })?.data?.error ?? "Invalid email or password";

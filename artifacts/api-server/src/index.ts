@@ -45,12 +45,12 @@ async function seedSuperAdmin() {
       .where(eq(usersTable.email, ADMIN_EMAIL));
 
     if (existing) {
-      // Ensure isAdmin flag is set even if the row existed before this feature
+      // Migrate existing admin row to the dedicated 'admin' role
       await db
         .update(usersTable)
-        .set({ isAdmin: true, emailVerified: true })
+        .set({ role: "admin", isAdmin: true, emailVerified: true })
         .where(eq(usersTable.email, ADMIN_EMAIL));
-      logger.info("Super admin account already exists — verified isAdmin flag");
+      logger.info("Super admin account already exists — migrated to admin role");
       return;
     }
 
@@ -59,9 +59,7 @@ async function seedSuperAdmin() {
       email: ADMIN_EMAIL,
       passwordHash,
       name: ADMIN_NAME,
-      // 'client' is used as a placeholder role — the admin is isolated from
-      // all marketplace activity via the isAdmin flag and has no freelancer profile.
-      role: "client",
+      role: "admin",
       isAdmin: true,
       emailVerified: true,
     });
